@@ -44,9 +44,76 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   } catch (e) { next(e); }
 });
 
+router.get('/reliability-matrix', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sources = await db('sources').select('*').orderBy('code_name', 'asc');
+
+    const grouped: Record<string, any[]> = {};
+    const reliabilityLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    for (const letter of reliabilityLetters) {
+      grouped[letter] = [];
+    }
+
+    for (const s of sources) {
+      const rating = s.reliability_rating || 'F-6';
+      const letter = rating.charAt(0).toUpperCase();
+      if (grouped[letter]) {
+        grouped[letter].push(s);
+      } else {
+        grouped['F'].push(s);
+      }
+    }
+
+    const total = sources.length;
+    const active = sources.filter((s: any) => s.status === 'ACTIVE').length;
+    const inactive = sources.filter((s: any) => s.status === 'INACTIVE').length;
+    const byType: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
+    for (const s of sources) {
+      byType[s.type] = (byType[s.type] || 0) + 1;
+      byStatus[s.status] = (byStatus[s.status] || 0) + 1;
+    }
+
+    const credibilityScores = sources
+      .map((s: any) => s.credibility_score)
+      .filter((score: number | null) => score != null);
+    const avgCredibility = credibilityScores.length > 0
+      ? Math.round((credibilityScores.reduce((a: number, b: number) => a + b, 0) / credibilityScores.length) * 10) / 10
+      : 0;
+
+    res.json({
+      data: {
+        grouped,
+        cells: sources.map((s: any) => {
+          const rating = s.reliability_rating || 'F-6';
+          const letter = rating.charAt(0).toUpperCase();
+          const num = parseInt(rating.charAt(2)) || s.credibility_score || 1;
+          return {
+            id: s.id,
+            code_name: s.code_name,
+            type: s.type,
+            status: s.status,
+            reliability_rating: rating,
+            reliability_letter: letter,
+            credibility_score: Math.min(6, Math.max(1, num)),
+            last_contact: s.last_contact_at,
+          };
+        }),
+        statistics: {
+          total,
+          active,
+          inactive,
+          by_type: byType,
+          by_status: byStatus,
+          avg_credibility: avgCredibility,
+        },
+      },
+    });
+  } catch (e) { next(e); }
+});
+
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  // Skip if this looks like a static route
-  if (req.params.id === 'reliability-matrix') return next();
   try {
     const item = await db('sources').where({ id: req.params.id }).first();
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
@@ -145,75 +212,6 @@ router.delete('/:id/attachments/:aid', async (req: Request, res: Response, next:
       .where({ id: req.params.aid, entity_type: 'source', entity_id: req.params.id })
       .del();
     res.json({ message: 'Attachment removed' });
-  } catch (e) { next(e); }
-});
-
-router.get('/reliability-matrix', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const sources = await db('sources').select('*').orderBy('code_name', 'asc');
-
-    const grouped: Record<string, any[]> = {};
-    const reliabilityLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
-
-    for (const letter of reliabilityLetters) {
-      grouped[letter] = [];
-    }
-
-    for (const s of sources) {
-      const rating = s.reliability_rating || 'F-6';
-      const letter = rating.charAt(0).toUpperCase();
-      if (grouped[letter]) {
-        grouped[letter].push(s);
-      } else {
-        grouped['F'].push(s);
-      }
-    }
-
-    const total = sources.length;
-    const active = sources.filter((s: any) => s.status === 'ACTIVE').length;
-    const inactive = sources.filter((s: any) => s.status === 'INACTIVE').length;
-    const byType: Record<string, number> = {};
-    const byStatus: Record<string, number> = {};
-    for (const s of sources) {
-      byType[s.type] = (byType[s.type] || 0) + 1;
-      byStatus[s.status] = (byStatus[s.status] || 0) + 1;
-    }
-
-    const credibilityScores = sources
-      .map((s: any) => s.credibility_score)
-      .filter((score: number | null) => score != null);
-    const avgCredibility = credibilityScores.length > 0
-      ? Math.round((credibilityScores.reduce((a: number, b: number) => a + b, 0) / credibilityScores.length) * 10) / 10
-      : 0;
-
-    res.json({
-      data: {
-        grouped,
-        cells: sources.map((s: any) => {
-          const rating = s.reliability_rating || 'F-6';
-          const letter = rating.charAt(0).toUpperCase();
-          const num = parseInt(rating.charAt(2)) || s.credibility_score || 1;
-          return {
-            id: s.id,
-            code_name: s.code_name,
-            type: s.type,
-            status: s.status,
-            reliability_rating: rating,
-            reliability_letter: letter,
-            credibility_score: Math.min(6, Math.max(1, num)),
-            last_contact: s.last_contact_at,
-          };
-        }),
-        statistics: {
-          total,
-          active,
-          inactive,
-          by_type: byType,
-          by_status: byStatus,
-          avg_credibility: avgCredibility,
-        },
-      },
-    });
   } catch (e) { next(e); }
 });
 

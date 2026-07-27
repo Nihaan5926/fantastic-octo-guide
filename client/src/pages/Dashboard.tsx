@@ -466,7 +466,7 @@ export default function DashboardPage() {
         const actors = threatsAllRes.value.data.data || threatsAllRes.value.data;
         if (Array.isArray(actors)) {
           for (const a of actors) {
-            const region = a.region || a.origin_region;
+            const region = a.metadata?.region;
             if (region) {
               regionCounts[region] = (regionCounts[region] || 0) + 1;
             }

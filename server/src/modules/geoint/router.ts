@@ -129,7 +129,7 @@ router.post('/features/:id/annotations', async (req: Request, res: Response, nex
     eventBus.emit('entity:created', {
       entityType: 'geoint_annotation',
       entityId: item.id,
-      title: item.text || 'New annotation',
+      title: item.title || item.content || 'New annotation',
       userId: req.user!.userId,
     });
     res.status(201).json(item);
@@ -144,7 +144,7 @@ router.put('/annotations/:id', async (req: Request, res: Response, next: NextFun
     eventBus.emit('entity:updated', {
       entityType: 'geoint_annotation',
       entityId: item.id,
-      title: item.text || 'Updated annotation',
+      title: item.title || item.content || 'Updated annotation',
       userId: req.user!.userId,
     });
     res.json(item);

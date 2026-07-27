@@ -27,8 +27,8 @@ const sophisticationScore: Record<string, number> = {
   LOW: 20, MEDIUM: 40, HIGH: 60, ADVANCED: 80, NATION_STATE: 100,
 };
 
-const confidenceScore: Record<string, number> = {
-  LOW: 25, MEDIUM: 50, HIGH: 75, CRITICAL: 100,
+const confidenceScore: Record<number, number> = {
+  25: 25, 50: 50, 75: 75, 100: 100,
 };
 
 const indicatorTypeOptions = [
@@ -43,14 +43,14 @@ const indicatorTypeOptions = [
 ];
 
 const confidenceOptions = [
-  { value: 'LOW', label: 'Low' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HIGH', label: 'High' },
-  { value: 'CRITICAL', label: 'Critical' },
+  { value: '25', label: 'Low' },
+  { value: '50', label: 'Medium' },
+  { value: '75', label: 'High' },
+  { value: '100', label: 'Critical' },
 ];
 
-const confidenceColorMap: Record<string, string> = {
-  LOW: 'gray', MEDIUM: 'blue', HIGH: 'yellow', CRITICAL: 'red',
+const confidenceColorMap: Record<number, string> = {
+  25: 'gray', 50: 'blue', 75: 'yellow', 100: 'red',
 };
 
 interface IndicatorForm {
@@ -59,7 +59,7 @@ interface IndicatorForm {
   confidence: string;
 }
 
-const emptyIndicator: IndicatorForm = { type: 'IP', value: '', confidence: 'MEDIUM' };
+const emptyIndicator: IndicatorForm = { type: 'IP', value: '', confidence: '50' };
 
 function RiskScoreCard({ score }: { score: number }) {
   const radius = 44;
@@ -243,7 +243,7 @@ export default function ActorDetail() {
     e.preventDefault();
     if (!id) return;
     try {
-      await createIndicator(id, indicatorForm);
+      await createIndicator(id, { ...indicatorForm, confidence: parseInt(indicatorForm.confidence) || 50 });
       toast.success('Indicator created');
       setIndicatorFormOpen(false);
       fetchIndicators(id);
@@ -339,7 +339,7 @@ export default function ActorDetail() {
   const riskScore = useMemo(() => {
     const sophWeight = sophisticationScore[selectedActor?.sophistication] || 20;
     if (indicators.length === 0) return Math.round(sophWeight * 0.6);
-    const avgConf = indicators.reduce((sum: number, ind: any) => sum + (confidenceScore[ind.confidence] || 25), 0) / indicators.length;
+    const avgConf = indicators.reduce((sum: number, ind: any) => sum + (parseInt(ind.confidence) || 25), 0) / indicators.length;
     return Math.round(sophWeight * 0.5 + avgConf * 0.5);
   }, [selectedActor?.sophistication, indicators]);
 
@@ -793,7 +793,7 @@ export default function ActorDetail() {
                 <div className="space-y-4">
                   {sortedIndicators.map((ind: any, idx: number) => (
                     <div key={ind.id || idx} className="relative">
-                      <div className={`absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-bg-card ${confidenceScore[ind.confidence] >= 75 ? 'bg-red-500' : confidenceScore[ind.confidence] >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`} />
+                      <div className={`absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-bg-card ${(ind.confidence || 0) >= 75 ? 'bg-red-500' : (ind.confidence || 0) >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`} />
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">

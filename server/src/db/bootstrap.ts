@@ -54,6 +54,23 @@ export async function bootstrapDatabase(db: knex.Knex) {
         is_active boolean DEFAULT true, created_at timestamptz DEFAULT now()
       )`
     },
+    // Collection Management
+    {
+      name: 'collection_pirs',
+      sql: `CREATE TABLE IF NOT EXISTS collection_pirs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        reference_number varchar(50) UNIQUE NOT NULL,
+        title varchar(500) NOT NULL,
+        description text,
+        priority varchar(20) DEFAULT 'MEDIUM',
+        status varchar(50) DEFAULT 'ACTIVE',
+        requirement_id uuid REFERENCES collection_requirements(id) ON DELETE SET NULL,
+        created_by uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now(),
+        updated_at timestamptz DEFAULT now()
+      )`
+    },
     // Reports
     {
       name: 'report_versions',

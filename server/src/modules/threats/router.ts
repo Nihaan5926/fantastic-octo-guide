@@ -325,7 +325,7 @@ router.get('/indicators', async (req: Request, res: Response, next: NextFunction
 
 router.post('/indicators', auditLog('indicator:create', 'indicator'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('indicators').insert({ id: uuid(), ...req.body }).returning('*');
+    const [item] = await db('indicators').insert({ id: uuid(), ...req.body, confidence: parseInt(req.body.confidence) || 50 }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'indicator',
       entityId: item.id,
@@ -481,7 +481,7 @@ router.post('/import', async (req: Request, res: Response, next: NextFunction) =
           threat_actor_id: actorId,
           type: indData.type,
           value: indData.value,
-          confidence: indData.confidence || 'MEDIUM',
+          confidence: parseInt(indData.confidence) || 50,
         }).returning('*');
         createdIndicators.push(indicator);
       } catch (err: any) {

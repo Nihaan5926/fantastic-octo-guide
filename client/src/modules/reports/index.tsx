@@ -8,8 +8,8 @@ export default {
   name: 'reports',
   routes: [
     { path: '/reports', element: <ReportsList /> },
-    { path: '/reports/:id', element: <ReportsDetail /> },
     { path: '/reports/intel-summary', element: <IntelSummary /> },
+    { path: '/reports/:id', element: <ReportsDetail /> },
   ],
   navItems: [
     { label: 'Reports', path: '/reports', icon: 'FileText', category: 'CORE INTEL', order: 10 },

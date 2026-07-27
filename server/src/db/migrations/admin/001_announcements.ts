@@ -4,6 +4,7 @@ import { up as markUp, down as markDown } from '../../migration-utils';
 const NAME = 'admin_001_announcements';
 
 export async function up(knex: Knex): Promise<void> {
+  if (await knex.schema.hasTable('announcements')) return;
   await knex.schema.createTable('announcements', (t) => {
     t.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     t.string('title', 255).notNullable();
