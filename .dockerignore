@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+*.log
+.git
+.gitignore
+uploads/
+!uploads/.gitkeep
+.vite/
+coverage/
+.DS_Store
+*.md
+!README.md
