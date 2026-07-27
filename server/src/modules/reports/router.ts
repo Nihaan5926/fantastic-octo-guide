@@ -422,14 +422,14 @@ router.post('/generate-summary', async (req: Request, res: Response, next: NextF
         .orderBy('updated_at', 'desc')
         .limit(10),
 
-      db('missions')
+      db('mission_plans')
         .select('*')
         .andWhere('created_at', '>=', start)
         .andWhere('created_at', '<=', end)
         .orderBy('created_at', 'desc')
         .limit(10),
 
-      db('osint_tasks')
+      db('osint_collection_tasks')
         .select('*')
         .andWhere('created_at', '>=', start)
         .andWhere('created_at', '<=', end)
@@ -443,7 +443,7 @@ router.post('/generate-summary', async (req: Request, res: Response, next: NextF
         .orderBy('created_at', 'desc')
         .limit(10),
 
-      db('alerts')
+      db('watch_logs')
         .select('*')
         .andWhere('created_at', '>=', start)
         .andWhere('created_at', '<=', end)

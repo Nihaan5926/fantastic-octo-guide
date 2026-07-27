@@ -45,6 +45,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  // Skip if this looks like a static route
+  if (req.params.id === 'reliability-matrix') return next();
   try {
     const item = await db('sources').where({ id: req.params.id }).first();
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
