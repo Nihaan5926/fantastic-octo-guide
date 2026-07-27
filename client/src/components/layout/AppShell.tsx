@@ -3,12 +3,17 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useAuthStore } from '../../store/authStore';
 
 export default function AppShell() {
   const sidebarCollapsed = useSettingsStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useSettingsStore((s) => s.setSidebarCollapsed);
   const [sidebarOpen, setSidebarOpen] = React.useState(!sidebarCollapsed && window.innerWidth >= 768);
   const [isMobile, setIsMobile] = React.useState(false);
+  const fetchProfile = useAuthStore((s) => s.fetchProfile);
+  const user = useAuthStore((s) => s.user);
+
+  React.useEffect(() => { if (!user) fetchProfile(); }, [user, fetchProfile]);
 
   React.useEffect(() => {
     const check = () => {

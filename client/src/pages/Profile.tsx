@@ -14,7 +14,6 @@ export default function ProfilePage() {
 
   // Profile form
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', email: '', rank: '', clearance: '' });
-  const [profileLoaded, setProfileLoaded] = useState(false);
 
   // Password form
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -26,8 +25,11 @@ export default function ProfilePage() {
     missionChanges: false, systemNotices: true, briefingReminders: false,
   });
 
+  const lastUserId = React.useRef<string | null>(null);
+
   useEffect(() => {
-    if (user && !profileLoaded) {
+    if (user && user.id !== lastUserId.current) {
+      lastUserId.current = user.id;
       setProfileForm({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
@@ -35,15 +37,13 @@ export default function ProfilePage() {
         rank: user.rank || '',
         clearance: user.clearance || 'UNCLASSIFIED',
       });
-      // Parse metadata - server returns JSONB which may be parsed or string
       let meta = (user as any).metadata;
       if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch {} }
       if (meta?.notifications) {
         setNotifPrefs((prev) => ({ ...prev, ...meta.notifications }));
       }
-      setProfileLoaded(true);
     }
-  }, [user, profileLoaded]);
+  }, [user]);
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
