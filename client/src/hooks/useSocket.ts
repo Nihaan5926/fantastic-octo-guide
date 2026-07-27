@@ -28,7 +28,8 @@ export function useSocket() {
     if (socket?.connected) return;
     if (socket) { socket.disconnect(); socket = null; }
 
-    socket = io('http://localhost:4000', {
+    const wsUrl = window.location.hostname === 'localhost' ? 'http://localhost:4000' : window.location.origin;
+    socket = io(wsUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
