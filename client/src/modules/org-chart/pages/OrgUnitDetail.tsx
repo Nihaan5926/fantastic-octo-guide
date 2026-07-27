@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { orgChartApi } from '../api';
 import { StatusBadge } from '../../../components/common/Badges';
 import DataTable from '../../../components/common/DataTable';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 import type { OrgUnit, PersonnelAssignment } from '../store';
 
 export default function OrgUnitDetail() {
@@ -26,7 +27,7 @@ export default function OrgUnitDetail() {
   }, [id]);
 
   if (loading && !unit) {
-    return <div className="card text-center py-16"><div className="animate-pulse text-text-muted">Loading...</div></div>;
+    return <DetailSkeleton />;
   }
   if (!unit) {
     return (

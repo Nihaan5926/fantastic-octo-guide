@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';

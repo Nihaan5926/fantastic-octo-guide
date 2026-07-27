@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { Edit, Trash2, Eye, Download, ChevronDown } from 'lucide-react';
+import { Edit, Trash2, Eye, Download, ChevronDown, Map } from 'lucide-react';
 import { geointApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { useGeointStore } from '../store';
@@ -190,6 +190,9 @@ export default function GeointList() {
         <div className="flex items-center gap-1">
           <button onClick={(e) => { e.stopPropagation(); navigate(`/geoint/${item.id}`); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary" title="View">
             <Eye size={15} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); navigate(`/geoint/${item.id}?map=true`); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-accent" title="View on Map">
+            <Map size={15} />
           </button>
           <button onClick={(e) => { e.stopPropagation(); openEdit(item); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary" title="Edit">
             <Edit size={15} />

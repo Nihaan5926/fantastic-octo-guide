@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
 
 const router = Router();
@@ -50,7 +51,7 @@ router.get('/users/:id', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
-router.post('/users', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/users', auditLog('user:create', 'user'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password, firstName, lastName, roleName, clearance } = req.body;
 
@@ -85,7 +86,7 @@ router.post('/users', async (req: Request, res: Response, next: NextFunction) =>
   } catch (e) { next(e); }
 });
 
-router.put('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.put('/users/:id', auditLog('user:update', 'user'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const update: any = { ...req.body, updated_at: db.fn.now() };
     delete update.id;
@@ -123,7 +124,7 @@ router.put('/users/:id', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
-router.delete('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/users/:id', auditLog('user:deactivate', 'user'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('users').where({ id: req.params.id }).update({ is_active: false });
     eventBus.emit('entity:deleted', {
@@ -136,7 +137,7 @@ router.delete('/users/:id', async (req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e); }
 });
 
-router.delete('/users/:id/permanent', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/users/:id/permanent', auditLog('user:delete', 'user'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = await db('users').where({ id: req.params.id }).first();
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
@@ -172,7 +173,7 @@ router.get('/roles/:id', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
-router.post('/roles', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/roles', auditLog('role:create', 'role'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [role] = await db('roles').insert({
       id: uuid(), name: req.body.name, description: req.body.description,
@@ -188,7 +189,7 @@ router.post('/roles', async (req: Request, res: Response, next: NextFunction) =>
   } catch (e) { next(e); }
 });
 
-router.put('/roles/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.put('/roles/:id', auditLog('role:update', 'role'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const update: any = {};
     if (req.body.name) update.name = req.body.name;
@@ -206,7 +207,7 @@ router.put('/roles/:id', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
-router.delete('/roles/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/roles/:id', auditLog('role:delete', 'role'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const usersWithRole = await db('users').where({ role_id: req.params.id }).first();
     if (usersWithRole) { res.status(400).json({ error: 'Cannot delete role assigned to users' }); return; }
@@ -259,6 +260,24 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       db('audit_logs').count('id').first().then((r: any) => parseInt(r.count, 10)),
     ]);
     res.json({ users: userCount, roles: roleCount, auditLogs: logCount });
+  } catch (e) { next(e); }
+});
+
+// ─── HEALTH ───
+
+router.get('/health', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const dbStatus = await db.raw('SELECT 1').then(() => 'connected').catch(() => 'disconnected');
+    res.json({
+      db: dbStatus,
+      uptime: process.uptime(),
+      memory: {
+        heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      },
+      modules: 30,
+    });
   } catch (e) { next(e); }
 });
 

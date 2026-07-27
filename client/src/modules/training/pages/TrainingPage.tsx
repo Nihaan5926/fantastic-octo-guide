@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Pencil, Trash2, Plus, GraduationCap, ClipboardList, FileText, User, TrendingUp, Users, BookOpen, Download, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, Plus, GraduationCap, ClipboardList, FileText, User, TrendingUp, Users, BookOpen, Download, ChevronDown, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { trainingApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
@@ -36,6 +36,7 @@ const emptyCourse: Partial<TrainingCourse> = {
   duration_hours: 0,
   instructor: '',
   is_required: false,
+  course_date: '',
 };
 
 const emptyEnrollment: Partial<TrainingEnrollment> = {
@@ -90,6 +91,8 @@ export default function TrainingPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -116,6 +119,38 @@ export default function TrainingPage() {
   const inProgressCount = myTrainings.filter((e: any) => e.status === 'IN_PROGRESS' || e.status === 'ENROLLED').length;
   const completedCount = myTrainings.filter((e: any) => e.status === 'COMPLETED').length;
   const failedCount = myTrainings.filter((e: any) => e.status === 'FAILED').length;
+
+  const calendarDays = useMemo(() => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    const days: { day: number; dateStr: string; isToday: boolean; courses: TrainingCourse[] }[] = [];
+    for (let d = 0; d < firstDay; d++) days.push({ day: 0, dateStr: '', isToday: false, courses: [] });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayCourses = courses.filter((c: any) => {
+        if (!c.course_date) return false;
+        return c.course_date.slice(0, 10) === dateStr;
+      });
+      days.push({
+        day: d,
+        dateStr,
+        isToday: today.getFullYear() === year && today.getMonth() === month && today.getDate() === d,
+        courses: dayCourses,
+      });
+    }
+    return days;
+  }, [calendarDate, courses]);
+
+  const selectedDayCourses = useMemo(() => {
+    if (!selectedDateStr) return [];
+    return courses.filter((c: any) => c.course_date && c.course_date.slice(0, 10) === selectedDateStr);
+  }, [selectedDateStr, courses]);
+
+  const prevMonth = () => setCalendarDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const nextMonth = () => setCalendarDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
   const handleExportCSV = async () => {
     setExporting(true);
@@ -190,6 +225,7 @@ export default function TrainingPage() {
         instructor: item.instructor || '',
         is_required: item.is_required || false,
         prerequisite_course_id: item.prerequisite_course_id || '',
+        course_date: item.course_date ? item.course_date.slice(0, 10) : '',
       });
     } else if (tab === 'enrollments' || tab === 'my-training') {
       setEnrollmentForm({
@@ -446,6 +482,81 @@ export default function TrainingPage() {
         </div>
       )}
 
+      {tab === 'courses' && (
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wide flex items-center gap-2">
+              <CalendarIcon size={16} /> Course Calendar
+            </h3>
+            <div className="flex items-center gap-2">
+              <button onClick={prevMonth} className="p-1 rounded hover:bg-bg-hover text-text-secondary"><ChevronLeft size={16} /></button>
+              <span className="text-sm font-medium min-w-[120px] text-center">
+                {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+              <button onClick={nextMonth} className="p-1 rounded hover:bg-bg-hover text-text-secondary"><ChevronRight size={16} /></button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+              <div key={d} className="text-xs font-semibold text-text-muted py-1">{d}</div>
+            ))}
+            {calendarDays.map((d, i) => (
+              <div
+                key={i}
+                onClick={() => d.dateStr && setSelectedDateStr(d.dateStr)}
+                className={`relative p-1.5 rounded-lg text-sm min-h-[40px] cursor-pointer transition-colors ${
+                  !d.day ? '' :
+                  d.isToday ? 'bg-accent/15 border border-accent/40' :
+                  d.courses.length > 0 ? 'bg-bg-tertiary hover:bg-bg-hover' :
+                  'hover:bg-bg-hover'
+                }`}
+              >
+                {d.day > 0 && (
+                  <>
+                    <span className={d.isToday ? 'text-accent font-bold' : 'text-text-secondary'}>{d.day}</span>
+                    {d.courses.length > 0 && (
+                      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                        {d.courses.slice(0, 3).map((_, j) => (
+                          <div key={j} className="w-1 h-1 rounded-full bg-accent" />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          {selectedDateStr && selectedDayCourses.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-border">
+              <h4 className="text-sm font-medium mb-2">
+                Courses on {new Date(selectedDateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}:
+              </h4>
+              <div className="space-y-2">
+                {selectedDayCourses.map((c) => (
+                  <div key={c.id} className="flex items-center gap-3 p-2 rounded-lg bg-bg-tertiary">
+                    <GraduationCap size={16} className="text-accent shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{c.title}</div>
+                      <div className="text-xs text-text-muted">{c.course_type} · {c.instructor || 'No instructor'} · {c.duration_hours}h</div>
+                    </div>
+                    {c.is_required && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/25 shrink-0">
+                        <BookOpen size={10} /> REQUIRED
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {selectedDateStr && selectedDayCourses.length === 0 && (
+            <div className="mt-4 pt-4 border-t border-border text-center text-xs text-text-muted">
+              No courses scheduled on this date
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-end">
         <button onClick={handleCreate} className="btn-primary">
           <Plus size={16} /> {currentCreateLabel}
@@ -472,6 +583,7 @@ export default function TrainingPage() {
                 <FormInput label="Instructor" value={courseForm.instructor || ''} onChange={(e) => setCourseForm((f: any) => ({ ...f, instructor: e.target.value }))} />
                 <FormInput label="Duration (hours)" type="number" value={courseForm.duration_hours?.toString() || '0'} onChange={(e) => setCourseForm((f: any) => ({ ...f, duration_hours: parseInt(e.target.value) || 0 }))} />
                 <FormInput label="Prerequisite Course ID" value={(courseForm as any).prerequisite_course_id || ''} onChange={(e) => setCourseForm((f: any) => ({ ...f, prerequisite_course_id: e.target.value }))} placeholder="Optional" />
+                <FormInput label="Course Date" type="date" value={(courseForm as any).course_date || ''} onChange={(e) => setCourseForm((f: any) => ({ ...f, course_date: e.target.value }))} />
               </div>
               <FormTextarea label="Description" value={courseForm.description || ''} onChange={(e) => setCourseForm((f: any) => ({ ...f, description: e.target.value }))} />
               <div className="flex items-center gap-2">

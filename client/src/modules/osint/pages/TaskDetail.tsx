@@ -2,10 +2,12 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useOSINTStore } from '../store';
+import { osintApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatusBadge } from '../../../components/common/Badges';
-import { Play, ArrowLeft, Download, ExternalLink, BarChart3, Globe, Calendar, Database, Loader2 } from 'lucide-react';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
+import { Play, ArrowLeft, Download, ExternalLink, BarChart3, Globe, Calendar, Database, Loader2, Clock } from 'lucide-react';
 
 const statusColorMap: Record<string, string> = {
   PENDING: 'gray', RUNNING: 'blue', COMPLETED: 'green', FAILED: 'red', PAUSED: 'yellow',
@@ -15,39 +17,42 @@ export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { selected, results, resultsPagination, isLoading, isSubmitting, fetchOne, fetchResults, run } = useOSINTStore();
-  const scheduledTasks = [{ value: 'ONCE', label: 'Once' }, { value: 'HOURLY', label: 'Hourly' }, { value: 'DAILY', label: 'Daily' }, { value: 'WEEKLY', label: 'Weekly' }, { value: 'MONTHLY', label: 'Monthly' }];
+  const scheduleOptions = [
+    { value: 'MANUAL', label: 'Manual' },
+    { value: 'HOURLY', label: 'Hourly' },
+    { value: 'EVERY_6_HOURS', label: 'Every 6 Hours' },
+    { value: 'DAILY', label: 'Daily' },
+    { value: 'WEEKLY', label: 'Weekly' },
+  ];
+
+  const [currentSchedule, setCurrentSchedule] = useState('MANUAL');
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  const handleScheduleSave = async () => {
+    if (!id) return;
+    setScheduleSaving(true);
+    try {
+      await osintApi.schedule(id, currentSchedule, scheduleEnabled);
+      toast.success('Schedule updated');
+      fetchOne(id);
+    } catch {
+      toast.error('Failed to update schedule');
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
 
   const nextRunText = useMemo(() => {
-    const schedule = selected?.schedule;
-    if (!schedule || schedule === 'ONCE') return 'Manual only';
-    const now = new Date();
-    switch (schedule) {
-      case 'HOURLY': {
-        const next = new Date(now);
-        next.setHours(next.getHours() + 1, 0, 0, 0);
-        return next.toLocaleString();
-      }
-      case 'DAILY': {
-        const next = new Date(now);
-        next.setDate(next.getDate() + 1);
-        next.setHours(0, 0, 0, 0);
-        return next.toLocaleString();
-      }
-      case 'WEEKLY': {
-        const next = new Date(now);
-        next.setDate(next.getDate() + 7);
-        next.setHours(0, 0, 0, 0);
-        return next.toLocaleString();
-      }
-      case 'MONTHLY': {
-        const next = new Date(now);
-        next.setMonth(next.getMonth() + 1);
-        next.setHours(0, 0, 0, 0);
-        return next.toLocaleString();
-      }
-      default: return schedule;
-    }
-  }, [selected?.schedule]);
+    const meta = selected?.metadata;
+    const metadata = typeof meta === 'string' ? JSON.parse(meta || '{}') : (meta || {});
+    const schedule = metadata.schedule;
+    const enabled = metadata.scheduleEnabled !== false;
+    const nextRun = metadata.next_run_at;
+    if (!schedule || schedule === 'MANUAL' || !enabled) return 'Not scheduled';
+    if (nextRun) return new Date(nextRun).toLocaleString();
+    return 'Pending';
+  }, [selected]);
 
   const [runLoading, setRunLoading] = useState(false);
   const [resultsPage, setResultsPage] = useState(1);
@@ -55,6 +60,14 @@ export default function TaskDetail() {
   useEffect(() => {
     if (id) fetchOne(id);
   }, [id]);
+
+  useEffect(() => {
+    if (selected?.metadata) {
+      const meta = typeof selected.metadata === 'string' ? JSON.parse(selected.metadata) : selected.metadata;
+      setCurrentSchedule(meta.schedule || 'MANUAL');
+      setScheduleEnabled(meta.scheduleEnabled !== false);
+    }
+  }, [selected]);
 
   useEffect(() => {
     if (id) fetchResults(id, { page: resultsPage, limit: 9999 });
@@ -151,11 +164,7 @@ export default function TaskDetail() {
   }, [results]);
 
   if (isLoading && !selected) {
-    return (
-      <div className="card text-center py-16">
-        <div className="animate-pulse text-text-muted">Loading...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!selected) {
@@ -228,11 +237,39 @@ export default function TaskDetail() {
             </div>
             <div>
               <span className="text-xs text-text-muted">Schedule</span>
-              <p className="text-sm mt-0.5">{selected?.schedule || '—'}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <select
+                  value={currentSchedule}
+                  onChange={(e) => setCurrentSchedule(e.target.value)}
+                  className="bg-bg-tertiary border border-border rounded-lg px-2 py-1 text-sm text-text-primary"
+                >
+                  {scheduleOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={scheduleEnabled}
+                    onChange={(e) => setScheduleEnabled(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  Enable
+                </label>
+                <button
+                  onClick={handleScheduleSave}
+                  disabled={scheduleSaving}
+                  className="btn-primary text-xs py-1 px-2"
+                >
+                  {scheduleSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
             </div>
             <div>
               <span className="text-xs text-text-muted">Next Run</span>
-              <p className="text-sm mt-0.5 text-accent">{nextRunText}</p>
+              <p className="text-sm mt-0.5 text-accent flex items-center gap-1">
+                <Clock size={12} /> {nextRunText}
+              </p>
             </div>
           </div>
           <button onClick={handleRun} disabled={runLoading || selected?.status === 'RUNNING'} className="btn-primary mt-4 w-full flex items-center justify-center gap-2">

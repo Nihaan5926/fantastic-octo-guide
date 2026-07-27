@@ -8,6 +8,7 @@ import { missionPlansApi } from '../api';
 import Modal from '../../../components/common/Modal';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge, ClassificationBadge, PriorityBadge } from '../../../components/common/Badges';
+import { CardSkeleton } from '../../../components/common/LoadingSkeleton';
 import { useMissionStore } from '../store';
 
 const statusOptions = [
@@ -469,9 +470,7 @@ export default function MissionDetail() {
             </button>
           </div>
           {attachmentsLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-pulse text-text-muted">Loading attachments...</div>
-            </div>
+            <CardSkeleton />
           ) : attachments.length === 0 ? (
             <p className="text-text-muted text-sm text-center py-8">No attachments yet</p>
           ) : (

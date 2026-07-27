@@ -9,6 +9,16 @@ import Modal from '../../../components/common/Modal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { FormInput, FormTextarea } from '../../../components/common/FormComponents';
 import { ClassificationBadge } from '../../../components/common/Badges';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
+import { MapContainer, TileLayer, Marker, Polygon, Polyline, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
 
 export default function GeointDetail() {
   const { id } = useParams<{ id: string }>();
@@ -36,7 +46,7 @@ export default function GeointDetail() {
     if (ft === 'POINT') {
       const lat = coords.coordinates?.[1] ?? coords.lat ?? coords[1] ?? coords[0];
       const lng = coords.coordinates?.[0] ?? coords.lng ?? coords[0] ?? coords[1];
-      return { type: 'POINT', detail: `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}` };
+      return { type: 'POINT', detail: `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`, lat: Number(lat), lng: Number(lng) };
     }
     if (ft === 'POLYGON') {
       const ring = coords.coordinates?.[0] ?? coords;
@@ -50,6 +60,46 @@ export default function GeointDetail() {
     }
     return { type: ft || 'COORDINATES', detail: JSON.stringify(coords).slice(0, 80) };
   }, [coords, currentFeature?.feature_type]);
+
+  const geoData = useMemo(() => {
+    if (!coords || !currentFeature?.feature_type) return null;
+    const ft = currentFeature.feature_type;
+    try {
+      if (ft === 'POINT') {
+        const lat = coords.coordinates?.[1] ?? coords.lat ?? coords[1] ?? coords[0];
+        const lng = coords.coordinates?.[0] ?? coords.lng ?? coords[0] ?? coords[1];
+        return { type: 'POINT', pos: [Number(lat), Number(lng)] as [number, number] };
+      }
+      if (ft === 'POLYGON') {
+        const ring = coords.coordinates?.[0] ?? coords;
+        if (Array.isArray(ring) && ring.length > 0) {
+          const pos = ring.map((p: any) => {
+            if (Array.isArray(p)) return [Number(p[1]), Number(p[0])] as [number, number];
+            return [Number(p.lat), Number(p.lng)] as [number, number];
+          });
+          return { type: 'POLYGON', positions: pos };
+        }
+      }
+      if (ft === 'LINESTRING') {
+        const pts = coords.coordinates ?? coords;
+        if (Array.isArray(pts) && pts.length > 0) {
+          const pos = pts.map((p: any) => {
+            if (Array.isArray(p)) return [Number(p[1]), Number(p[0])] as [number, number];
+            return [Number(p.lat), Number(p.lng)] as [number, number];
+          });
+          return { type: 'LINESTRING', positions: pos };
+        }
+      }
+    } catch {}
+    return null;
+  }, [coords, currentFeature?.feature_type]);
+
+  const mapCenter: [number, number] = useMemo(() => {
+    if (formattedCoords && 'lat' in formattedCoords && 'lng' in formattedCoords) {
+      return [formattedCoords.lat as number, formattedCoords.lng as number];
+    }
+    return [0, 0];
+  }, [formattedCoords]);
 
   const handleCopyCoords = () => {
     const text = formattedCoords ? formattedCoords.detail : JSON.stringify(coords);
@@ -123,7 +173,7 @@ export default function GeointDetail() {
   ];
 
   if (currentFeatureLoading) {
-    return <div className="card p-8 text-center text-text-muted animate-pulse">Loading feature...</div>;
+    return <DetailSkeleton />;
   }
 
   if (!currentFeature) {
@@ -200,6 +250,64 @@ export default function GeointDetail() {
           )}
         </div>
       </div>
+
+      {geoData && (
+        <div className="card mb-6">
+          <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2">
+            <MapPin size={14} /> Map View
+          </h3>
+          <div className="rounded-lg overflow-hidden border border-border" style={{ height: '400px' }}>
+            <MapContainer
+              center={mapCenter}
+              zoom={13}
+              scrollWheelZoom={true}
+              style={{ height: '100%', width: '100%' }}
+              className="geoint-map"
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              />
+              {geoData.type === 'POINT' && (
+                <Marker position={geoData.pos || [0, 0] as [number, number]}> 
+                  <Popup>
+                    <div className="text-sm text-gray-900">
+                      <strong>{currentFeature.title}</strong><br />
+                      {typeof formattedCoords?.detail === 'string' ? formattedCoords.detail : ''}
+                    </div>
+                  </Popup>
+                </Marker>
+              )}
+              {geoData.type === 'POLYGON' && geoData.positions && (
+                <Polygon
+                  positions={geoData.positions}
+                  pathOptions={{ color: '#8b5cf6', fillColor: '#8b5cf6', fillOpacity: 0.3 }}
+                >
+                  <Popup>
+                    <div className="text-sm text-gray-900">
+                      <strong>{currentFeature.title}</strong><br />
+                      {geoData.positions.length} vertices
+                    </div>
+                  </Popup>
+                </Polygon>
+              )}
+              {geoData.type === 'LINESTRING' && geoData.positions && (
+                <Polyline
+                  positions={geoData.positions}
+                  pathOptions={{ color: '#06b6d4', weight: 3 }}
+                >
+                  <Popup>
+                    <div className="text-sm text-gray-900">
+                      <strong>{currentFeature.title}</strong><br />
+                      {geoData.positions.length} points
+                    </div>
+                  </Popup>
+                </Polyline>
+              )}
+            </MapContainer>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">

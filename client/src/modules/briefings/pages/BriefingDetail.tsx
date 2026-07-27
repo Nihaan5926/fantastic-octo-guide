@@ -7,6 +7,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Modal from '../../../components/common/Modal';
 import { FormInput, FormSelect } from '../../../components/common/FormComponents';
 import FileUpload from '../../../components/common/FileUpload';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 import { useBriefingStore } from '../store';
 import { briefingsApi } from '../api';
 
@@ -130,9 +131,7 @@ export default function BriefingDetail() {
       </button>
 
       {store.isLoading ? (
-        <div className="card text-center py-16">
-          <div className="animate-pulse text-text-muted">Loading...</div>
-        </div>
+        <DetailSkeleton />
       ) : b ? (
         <>
           <div className="card mb-6">

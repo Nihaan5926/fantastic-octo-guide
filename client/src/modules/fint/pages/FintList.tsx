@@ -15,6 +15,7 @@ import { StatusBadge } from '../../../components/common/Badges';
 const TABS = [
   { key: 'transactions' as const, label: 'Transactions' },
   { key: 'entities' as const, label: 'Entities' },
+  { key: 'network' as const, label: 'Network' },
 ];
 
 interface TransactionForm {
@@ -67,15 +68,32 @@ export default function FintList() {
     fetchEntities();
   }, []);
 
+  const [networkAllEntities, setNetworkAllEntities] = useState<any[]>([]);
+  const [networkAllTransactions, setNetworkAllTransactions] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === 'network') {
+      Promise.all([
+        fintApi.listEntities({ limit: 200 }),
+        fintApi.listTransactions({ limit: 200 }),
+      ]).then(([entitiesRes, txRes]) => {
+        setNetworkAllEntities((entitiesRes.data.data || entitiesRes.data || []));
+        setNetworkAllTransactions((txRes.data.data || txRes.data || []));
+      }).catch(() => {});
+    }
+  }, [activeTab]);
+
   const tabPagination = activeTab === 'transactions' ? transactionsPagination : entitiesPagination;
 
   const handleTabPageChange = (page: number) => {
+    if (activeTab === 'network') return;
     const p = { page, limit: tabPagination.limit };
     if (activeTab === 'transactions') fetchTransactions(p);
     else fetchEntities(p);
   };
 
   const openCreate = () => {
+    if (activeTab === 'network') return;
     setEditingId(null);
     if (activeTab === 'transactions') setTxForm(emptyTx);
     else setEntForm(emptyEnt);
@@ -340,7 +358,7 @@ export default function FintList() {
           {TABS.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => setActiveTab(tab.key as any)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === tab.key ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}
             >
               {tab.label}
@@ -355,53 +373,139 @@ export default function FintList() {
         <SearchBar value={tabSearch} onChange={setTabSearch} placeholder={`Search ${activeTab}...`} className="max-w-xs" />
       </div>
 
-      {activeTab === 'transactions' && networkNodes.length > 0 && (
+      {activeTab === 'network' ? (
         <div className="card mb-4">
-          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wide mb-3">Transaction Network Graph</h3>
-          <div className="bg-bg-primary rounded-lg p-4 overflow-x-auto">
-            <div className="flex flex-wrap items-center gap-3 min-w-fit">
-              {networkNodes.map((node, i) => (
-                <div key={node.id} className="flex items-center gap-2">
-                  <div className="flex flex-col items-center">
-                    <div className="w-3 h-3 rounded-full bg-accent" />
-                    <span className="text-xs text-text-muted mt-1 max-w-[80px] truncate" title={node.id}>{node.label}</span>
-                    {node.count > 1 && <span className="text-xs text-accent">{node.count} tx</span>}
-                  </div>
-                  {i < networkNodes.length - 1 && (
-                    <ArrowRightCircle size={16} className="text-text-muted mx-1" />
-                  )}
-                </div>
-              ))}
-            </div>
-            {networkEdges.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {networkEdges.slice(0, 10).map((edge, i) => (
-                  <div key={i} className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${edge.flagged ? 'bg-red-500/10 border border-red-500/30' : 'bg-bg-card border border-border'}`}>
-                    <span className="text-text-muted">{edge.from.slice(0, 8)}</span>
-                    <ArrowRightCircle size={10} className={edge.flagged ? 'text-red-400' : 'text-text-muted'} />
-                    <span className="text-text-muted">{edge.to.slice(0, 8)}</span>
-                    <span className={`font-mono ml-1 ${edge.flagged ? 'text-red-400' : 'text-text-secondary'}`}>{formatCurrency(edge.amount)}</span>
-                  </div>
-                ))}
-                {networkEdges.length > 10 && (
-                  <span className="text-xs text-text-muted self-center">+{networkEdges.length - 10} more</span>
-                )}
+          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wide mb-3">
+            Transaction Network Graph ({networkAllEntities.length} entities, {networkAllTransactions.length} transactions)
+          </h3>
+          <div className="bg-bg-primary rounded-lg p-4 overflow-auto" style={{ minHeight: '500px', position: 'relative' }}>
+            {networkAllEntities.length === 0 ? (
+              <div className="flex items-center justify-center h-96 text-text-muted text-sm">No network data available</div>
+            ) : (
+              <div style={{ position: 'relative', width: '100%', height: '500px' }}>
+                {(() => {
+                  const entities = networkAllEntities;
+                  const txns = networkAllTransactions;
+                  const centerX = 400;
+                  const centerY = 250;
+                  const radius = 180;
+                  const nodePositions: Record<string, { x: number; y: number; entity: any }> = {};
+                  entities.forEach((e: any, i: number) => {
+                    const angle = (2 * Math.PI * i) / Math.max(entities.length, 1);
+                    nodePositions[e.id] = {
+                      x: centerX + radius * Math.cos(angle),
+                      y: centerY + radius * Math.sin(angle),
+                      entity: e,
+                    };
+                  });
+                  const getRiskColor = (score: number) =>
+                    score > 60 ? '#ef4444' : score >= 40 ? '#f59e0b' : '#22c55e';
+                  const edgesRendered: any[] = [];
+                  const seen = new Set<string>();
+                  txns.forEach((tx: any) => {
+                    const key = [tx.sender_entity_id, tx.receiver_entity_id].sort().join('|');
+                    if (!seen.has(key) && seen.size < 30) {
+                      seen.add(key);
+                      edgesRendered.push(tx);
+                    }
+                  });
+                  return (
+                    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }} viewBox="0 0 800 500">
+                      {edgesRendered.map((tx: any, i: number) => {
+                        const from = nodePositions[tx.sender_entity_id];
+                        const to = nodePositions[tx.receiver_entity_id];
+                        if (!from || !to) return null;
+                        const mx = (from.x + to.x) / 2;
+                        const my = (from.y + to.y) / 2;
+                        return (
+                          <g key={`edge-${i}`}>
+                            <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={tx.flagged ? '#ef4444' : '#475569'} strokeWidth={tx.flagged ? 2 : 1} strokeOpacity={0.5} />
+                            <text x={mx} y={my - 4} textAnchor="middle" fill={tx.flagged ? '#ef4444' : '#94a3b8'} fontSize="9" fontWeight="bold">
+                              {formatCurrency(tx.amount || 0, tx.currency)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      {Object.entries(nodePositions).map(([id, pos]) => {
+                        const score = Number(pos.entity.risk_score) || 0;
+                        const color = getRiskColor(score);
+                        const label = pos.entity.name || id;
+                        const shortLabel = label.length > 16 ? label.slice(0, 16) + '...' : label;
+                        return (
+                          <g key={`node-${id}`}>
+                            <circle cx={pos.x} cy={pos.y} r={score > 60 ? 18 : score >= 40 ? 13 : 10} fill={color} fillOpacity={0.85} stroke="#fff" strokeWidth={1.5} />
+                            <text x={pos.x} y={pos.y + 3} textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold">{score}</text>
+                            <text x={pos.x} y={pos.y + 22} textAnchor="middle" fill="#cbd5e1" fontSize="9">{shortLabel}</text>
+                            {pos.entity.entity_type && (
+                              <text x={pos.x} y={pos.y + 32} textAnchor="middle" fill="#64748b" fontSize="7">{pos.entity.entity_type}</text>
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  );
+                })()}
               </div>
             )}
           </div>
+          <div className="flex items-center gap-6 mt-3 text-xs text-text-muted px-2">
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500" /> Low Risk &lt;40</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> Medium Risk 40-60</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /> High Risk &gt;60</div>
+            <div className="flex items-center gap-1.5 ml-auto"><div className="w-3 h-0.5 bg-red-500" /> Flagged Transaction</div>
+          </div>
         </div>
+      ) : (
+        <>
+          {activeTab === 'transactions' && networkNodes.length > 0 && (
+            <div className="card mb-4">
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wide mb-3">Transaction Network Graph</h3>
+              <div className="bg-bg-primary rounded-lg p-4 overflow-x-auto">
+                <div className="flex flex-wrap items-center gap-3 min-w-fit">
+                  {networkNodes.map((node, i) => (
+                    <div key={node.id} className="flex items-center gap-2">
+                      <div className="flex flex-col items-center">
+                        <div className="w-3 h-3 rounded-full bg-accent" />
+                        <span className="text-xs text-text-muted mt-1 max-w-[80px] truncate" title={node.id}>{node.label}</span>
+                        {node.count > 1 && <span className="text-xs text-accent">{node.count} tx</span>}
+                      </div>
+                      {i < networkNodes.length - 1 && (
+                        <ArrowRightCircle size={16} className="text-text-muted mx-1" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {networkEdges.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {networkEdges.slice(0, 10).map((edge, i) => (
+                      <div key={i} className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${edge.flagged ? 'bg-red-500/10 border border-red-500/30' : 'bg-bg-card border border-border'}`}>
+                        <span className="text-text-muted">{edge.from.slice(0, 8)}</span>
+                        <ArrowRightCircle size={10} className={edge.flagged ? 'text-red-400' : 'text-text-muted'} />
+                        <span className="text-text-muted">{edge.to.slice(0, 8)}</span>
+                        <span className={`font-mono ml-1 ${edge.flagged ? 'text-red-400' : 'text-text-secondary'}`}>{formatCurrency(edge.amount)}</span>
+                      </div>
+                    ))}
+                    {networkEdges.length > 10 && (
+                      <span className="text-xs text-text-muted self-center">+{networkEdges.length - 10} more</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {tabError && <div className="card border-red-500/30 bg-red-500/10 text-red-400 text-sm p-4 mb-4">{tabError}</div>}
+
+          {activeTab === 'entities' && riskWarning > 0 && (
+            <div className="card border-red-500/30 bg-red-500/10 p-4 mb-4 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-red-400" />
+              <span className="text-sm text-red-400">{riskWarning} high-risk entit{riskWarning !== 1 ? 'ies' : 'y'} detected (score ≥ 60)</span>
+            </div>
+          )}
+
+          <DataTable columns={tabColumns} data={tabData} isLoading={tabLoading} pagination={tabPagination} onPageChange={handleTabPageChange} emptyMessage={`No ${activeTab} found`} />
+        </>
       )}
-
-      {tabError && <div className="card border-red-500/30 bg-red-500/10 text-red-400 text-sm p-4 mb-4">{tabError}</div>}
-
-      {activeTab === 'entities' && riskWarning > 0 && (
-        <div className="card border-red-500/30 bg-red-500/10 p-4 mb-4 flex items-center gap-3">
-          <AlertTriangle size={18} className="text-red-400" />
-          <span className="text-sm text-red-400">{riskWarning} high-risk entit{riskWarning !== 1 ? 'ies' : 'y'} detected (score ≥ 60)</span>
-        </div>
-      )}
-
-      <DataTable columns={tabColumns} data={tabData} isLoading={tabLoading} pagination={tabPagination} onPageChange={handleTabPageChange} emptyMessage={`No ${activeTab} found`} />
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? `Edit ${activeTab === 'transactions' ? 'Transaction' : 'Entity'}` : `Create ${activeTab === 'transactions' ? 'Transaction' : 'Entity'}`} size="lg">
         {activeTab === 'transactions' ? (

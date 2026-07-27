@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
 import { auditLog } from '../../middleware/audit';
+import { authorize } from '../../middleware/rbac';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import { sanitizeInput } from '../../utils/validators';
@@ -235,6 +236,88 @@ router.delete('/:id/attachments/:aid', async (req: Request, res: Response, next:
       .where({ id: req.params.aid, entity_type: 'report', entity_id: req.params.id })
       .del();
     res.json({ message: 'Attachment removed' });
+  } catch (e) { next(e); }
+});
+
+// ── Approval Workflow ──
+
+router.put('/:id/submit', auditLog('report:submit', 'report'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const report = await db('intelligence_reports').where({ id: req.params.id }).first();
+    if (!report) { res.status(404).json({ error: 'Report not found' }); return; }
+    if (report.status !== 'DRAFT') {
+      res.status(400).json({ error: 'Only DRAFT reports can be submitted for review' });
+      return;
+    }
+    const [item] = await db('intelligence_reports')
+      .where({ id: req.params.id })
+      .update({ status: 'IN_REVIEW', submitted_at: db.fn.now(), updated_at: db.fn.now() })
+      .returning('*');
+    logger.info(`Report submitted for review: ${item.title || item.reference_number}`, { reportId: item.id });
+    eventBus.emit('entity:updated', {
+      entityType: 'report', entityId: item.id,
+      title: item.title || item.reference_number, userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/:id/approve', authorize('reports:approve'), auditLog('report:approve', 'report'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const report = await db('intelligence_reports').where({ id: req.params.id }).first();
+    if (!report) { res.status(404).json({ error: 'Report not found' }); return; }
+    if (report.status !== 'IN_REVIEW') {
+      res.status(400).json({ error: 'Only reports IN_REVIEW can be approved' });
+      return;
+    }
+    if (report.author_id === req.user!.userId) {
+      res.status(400).json({ error: 'Cannot approve your own report' });
+      return;
+    }
+    const [item] = await db('intelligence_reports')
+      .where({ id: req.params.id })
+      .update({ status: 'APPROVED', approved_by: req.user!.userId, approved_at: db.fn.now(), updated_at: db.fn.now() })
+      .returning('*');
+    logger.info(`Report approved: ${item.title || item.reference_number}`, { reportId: item.id, approvedBy: req.user!.userId });
+    eventBus.emit('entity:updated', {
+      entityType: 'report', entityId: item.id,
+      title: item.title || item.reference_number, userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/:id/reject', authorize('reports:approve'), auditLog('report:reject', 'report'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { rejection_reason } = req.body;
+    if (!rejection_reason || !rejection_reason.trim()) {
+      res.status(400).json({ error: 'Rejection reason is required' });
+      return;
+    }
+    const report = await db('intelligence_reports').where({ id: req.params.id }).first();
+    if (!report) { res.status(404).json({ error: 'Report not found' }); return; }
+    if (report.status !== 'IN_REVIEW') {
+      res.status(400).json({ error: 'Only reports IN_REVIEW can be rejected' });
+      return;
+    }
+    if (report.author_id === req.user!.userId) {
+      res.status(400).json({ error: 'Cannot reject your own report' });
+      return;
+    }
+    const [item] = await db('intelligence_reports')
+      .where({ id: req.params.id })
+      .update({
+        status: 'DRAFT',
+        rejection_reason: rejection_reason.trim(),
+        updated_at: db.fn.now(),
+      })
+      .returning('*');
+    logger.info(`Report rejected: ${item.title || item.reference_number}`, { reportId: item.id, rejectedBy: req.user!.userId });
+    eventBus.emit('entity:updated', {
+      entityType: 'report', entityId: item.id,
+      title: item.title || item.reference_number, userId: req.user!.userId,
+    });
+    res.json(item);
   } catch (e) { next(e); }
 });
 

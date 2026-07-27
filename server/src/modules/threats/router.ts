@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';
@@ -51,35 +52,52 @@ router.get('/actors/:id', async (req: Request, res: Response, next: NextFunction
   } catch (e) { next(e); }
 });
 
-router.post('/actors', async (req: Request, res: Response, next: NextFunction) => {
+function calculateRiskScore(sophistication: string | null, indicators: any[]): number {
+  const sophisticationWeight: Record<string, number> = { LOW: 20, MEDIUM: 50, HIGH: 80, ADVANCED: 90, NATION_STATE: 100 };
+  const sophWeight = sophisticationWeight[sophistication || ''] || 20;
+  if (indicators.length === 0) return Math.round(sophWeight * 0.6);
+  const confidenceOrder: Record<string, number> = { LOW: 25, MEDIUM: 50, HIGH: 75, CRITICAL: 100 };
+  const avgConf = indicators.reduce((sum: number, ind: any) => sum + (confidenceOrder[ind.confidence] || 25), 0) / indicators.length;
+  return Math.round(sophWeight * 0.5 + avgConf * 0.5);
+}
+
+router.post('/actors', auditLog('threat_actor:create', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('threat_actors').insert({ id: uuid(), ...req.body }).returning('*');
+    const body = { ...req.body };
+    const [item] = await db('threat_actors').insert({ id: uuid(), ...body }).returning('*');
+    const riskScore = calculateRiskScore(item.sophistication, []);
+    const currentMeta = typeof item.metadata === 'string' ? JSON.parse(item.metadata || '{}') : (item.metadata || {});
+    await db('threat_actors').where({ id: item.id }).update({ metadata: JSON.stringify({ ...currentMeta, risk_score: riskScore }) });
     eventBus.emit('entity:created', {
       entityType: 'threat_actor',
       entityId: item.id,
       title: item.name || 'New threat actor',
       userId: req.user!.userId,
     });
-    res.status(201).json(item);
+    res.status(201).json({ ...item, risk_score: riskScore });
   } catch (e) { next(e); }
 });
 
-router.put('/actors/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.put('/actors/:id', auditLog('threat_actor:update', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('threat_actors').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    const indicators = await db('indicators').where({ threat_actor_id: req.params.id });
+    const riskScore = calculateRiskScore(item.sophistication, indicators);
+    const currentMeta = typeof item.metadata === 'string' ? JSON.parse(item.metadata || '{}') : (item.metadata || {});
+    await db('threat_actors').where({ id: item.id }).update({ metadata: JSON.stringify({ ...currentMeta, risk_score: riskScore }) });
     eventBus.emit('entity:updated', {
       entityType: 'threat_actor',
       entityId: item.id,
       title: item.name || 'Updated threat actor',
       userId: req.user!.userId,
     });
-    res.json(item);
+    res.json({ ...item, risk_score: riskScore });
   } catch (e) { next(e); }
 });
 
-router.delete('/actors/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/actors/:id', auditLog('threat_actor:delete', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('threat_actors').where({ id: req.params.id }).del();
     eventBus.emit('entity:deleted', {
@@ -116,7 +134,7 @@ router.get('/indicators', async (req: Request, res: Response, next: NextFunction
   } catch (e) { next(e); }
 });
 
-router.post('/indicators', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/indicators', auditLog('indicator:create', 'indicator'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('indicators').insert({ id: uuid(), ...req.body }).returning('*');
     eventBus.emit('entity:created', {
@@ -129,7 +147,7 @@ router.post('/indicators', async (req: Request, res: Response, next: NextFunctio
   } catch (e) { next(e); }
 });
 
-router.delete('/indicators/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/indicators/:id', auditLog('indicator:delete', 'indicator'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('indicators').where({ id: req.params.id }).del();
     eventBus.emit('entity:deleted', {
@@ -251,6 +269,46 @@ router.delete('/actors/:id/attachments/:aid', async (req: Request, res: Response
       .where({ id: req.params.aid, entity_type: 'threat_actor', entity_id: req.params.id })
       .del();
     res.json({ message: 'Attachment removed' });
+  } catch (e) { next(e); }
+});
+
+// ── Risk Scoring ──
+
+router.post('/actors/:id/calculate-risk', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const actor = await db('threat_actors').where({ id: req.params.id }).first();
+    if (!actor) { res.status(404).json({ error: 'Not found' }); return; }
+    const indicators = await db('indicators').where({ threat_actor_id: req.params.id });
+
+    const sophisticationWeight: Record<string, number> = { LOW: 20, MEDIUM: 50, HIGH: 80, ADVANCED: 90, NATION_STATE: 100 };
+    const confidenceOrder: Record<string, number> = { LOW: 25, MEDIUM: 50, HIGH: 75, CRITICAL: 100 };
+
+    const sophWeight = sophisticationWeight[actor.sophistication] || 20;
+    const avgConfObj = indicators.length > 0
+      ? indicators.reduce((sum: number, ind: any) => sum + (confidenceOrder[ind.confidence] || 25), 0) / indicators.length
+      : 0;
+
+    const riskScore = indicators.length === 0
+      ? Math.round(sophWeight * 0.6)
+      : Math.round(sophWeight * 0.5 + avgConfObj * 0.5);
+
+    const breakdown = {
+      sophistication_level: actor.sophistication || 'UNKNOWN',
+      sophistication_weight: sophWeight,
+      indicator_count: indicators.length,
+      avg_indicator_confidence: indicators.length > 0 ? Math.round(avgConfObj) : null,
+      formula: indicators.length > 0
+        ? `(${sophWeight} * 0.5) + (${Math.round(avgConfObj)} * 0.5) = ${riskScore}`
+        : `${sophWeight} * 0.6 = ${riskScore}`,
+      risk_score: riskScore,
+    };
+
+    const existingMeta = typeof actor.metadata === 'string' ? JSON.parse(actor.metadata || '{}') : (actor.metadata || {});
+    await db('threat_actors').where({ id: req.params.id }).update({
+      metadata: JSON.stringify({ ...existingMeta, risk_score: riskScore }),
+    });
+
+    res.json({ risk_score: riskScore, breakdown });
   } catch (e) { next(e); }
 });
 

@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { budgetApi } from '../api';
 import { StatusBadge } from '../../../components/common/Badges';
 import DataTable from '../../../components/common/DataTable';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const statusColorMap: Record<string, string> = {
   ACTIVE: 'green', PLANNED: 'blue', CLOSED: 'gray', ON_HOLD: 'yellow', CANCELLED: 'red',
@@ -37,7 +38,7 @@ export default function BudgetDetail() {
   }, [id]);
 
   if (loading) {
-    return <div className="card text-center py-16"><div className="animate-pulse text-text-muted">Loading...</div></div>;
+    return <DetailSkeleton />;
   }
   if (!program) {
     return (
@@ -111,6 +112,66 @@ export default function BudgetDetail() {
             <p className="text-sm mt-1 whitespace-pre-wrap">{program.notes}</p>
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Budget vs Actual</h3>
+        {(() => {
+          const allocated = program.allocated_amount || 0;
+          const spent = program.spent_amount || 0;
+          const maxVal = Math.max(allocated, spent, 1);
+          const allocatedPct = Math.round((allocated / maxVal) * 100);
+          const spentPct = Math.round((spent / maxVal) * 100);
+          const spentRatio = allocated > 0 ? (spent / allocated) * 100 : 0;
+          const barColor = spentRatio > 80 ? '#ef4444' : spentRatio >= 50 ? '#f59e0b' : '#22c55e';
+          return (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-text-muted">
+                  <span>Allocated</span>
+                  <span className="font-semibold text-text-primary">{formatCurrency(allocated)}</span>
+                </div>
+                <div className="w-full bg-bg-tertiary rounded-full h-6 overflow-hidden">
+                  <div className="h-full bg-blue-500/60 rounded-full flex items-center justify-end pr-2 text-xs font-semibold text-white" style={{ width: `${allocatedPct}%` }}>
+                    {allocatedPct > 8 ? `${allocatedPct}%` : ''}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-text-muted">
+                  <span>Spent</span>
+                  <span className="font-semibold text-text-primary">{formatCurrency(spent)}</span>
+                </div>
+                <div className="w-full bg-bg-tertiary rounded-full h-6 overflow-hidden">
+                  <div className="h-full rounded-full flex items-center justify-end pr-2 text-xs font-semibold text-white transition-all" style={{ width: `${spentPct}%`, backgroundColor: barColor }}>
+                    {spentPct > 8 ? `${spentPct}%` : ''}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
+                <span className="text-xs text-text-muted">Spent Percentage:</span>
+                <div className="flex-1 h-3 bg-bg-tertiary rounded-full overflow-hidden max-w-xs">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(spentRatio, 100)}%`, backgroundColor: barColor }} />
+                </div>
+                <span className="text-xs font-semibold" style={{ color: barColor }}>{spentRatio.toFixed(0)}%</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border">
+                <div className="text-center">
+                  <div className="text-xs text-text-muted">Total Budget</div>
+                  <div className="text-sm font-semibold">{formatCurrency(program.total_amount)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-text-muted">Remaining</div>
+                  <div className="text-sm font-semibold" style={{ color: allocated - spent >= 0 ? '#22c55e' : '#ef4444' }}>{formatCurrency(allocated - spent)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-text-muted">Contracts</div>
+                  <div className="text-sm font-semibold">{contracts.length}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="card">

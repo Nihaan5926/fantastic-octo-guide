@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';
@@ -70,7 +71,7 @@ router.get('/plans/:id', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
-router.post('/plans', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/plans', auditLog('mission:create', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ref = `MSP-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(5, '0')}`;
     const [item] = await db('mission_plans').insert({
@@ -88,7 +89,7 @@ router.post('/plans', async (req: Request, res: Response, next: NextFunction) =>
   } catch (e) { next(e); }
 });
 
-router.put('/plans/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.put('/plans/:id', auditLog('mission:update', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('mission_plans')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
@@ -103,7 +104,7 @@ router.put('/plans/:id', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
-router.delete('/plans/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/plans/:id', auditLog('mission:delete', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('mission_plans').where({ id: req.params.id }).del();
     eventBus.emit('entity:deleted', {

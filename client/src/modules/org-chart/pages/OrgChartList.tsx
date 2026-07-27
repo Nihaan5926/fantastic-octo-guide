@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { ChevronRight, ChevronDown, Pencil, Trash2, Plus, Building2, Download, ChevronDown as ChevronDownIcon } from 'lucide-react';
+import { ChevronRight, ChevronDown, Pencil, Trash2, Plus, Building2, Download, ChevronDown as ChevronDownIcon, Users } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { orgChartApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
@@ -8,6 +8,7 @@ import SearchBar from '../../../components/common/SearchBar';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { CardSkeleton } from '../../../components/common/LoadingSkeleton';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { useOrgChartStore, OrgUnit, PersonnelAssignment } from '../store';
 
@@ -21,32 +22,73 @@ const UNIT_TYPE_OPTIONS = [
   { value: 'DETACHMENT', label: 'Detachment' },
 ];
 
-function TreeNode({ unit, level = 0 }: { unit: OrgUnit; level?: number }) {
+const unitTypeColors: Record<string, string> = {
+  DIRECTORATE: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  DIVISION: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  BRANCH: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  SECTION: 'bg-green-500/20 text-green-400 border-green-500/30',
+  TEAM: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  SQUAD: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  DETACHMENT: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+};
+
+function TreeNode({ unit, level = 0, assignments }: { unit: OrgUnit; level?: number; assignments: PersonnelAssignment[] }) {
   const [expanded, setExpanded] = useState(level < 2);
   const hasChildren = unit.children && unit.children.length > 0;
+  const unitAssignments = assignments.filter((a) => a.unit_id === unit.id);
+  const personCount = unitAssignments.length;
+  const typeBadge = unitTypeColors[unit.unit_type] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
   return (
-    <div>
-      <div
-        className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-bg-hover transition-colors cursor-pointer"
-        style={{ paddingLeft: `${level * 20 + 8}px` }}
-      >
-        {hasChildren ? (
-          <button onClick={() => setExpanded(!expanded)} className="p-0.5 text-text-muted">
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-        ) : (
-          <span className="w-5" />
-        )}
-        <Building2 size={14} className="text-accent shrink-0" />
-        <span className="text-sm font-medium">{unit.name}</span>
-        <span className="text-xs text-text-muted">{unit.unit_type}</span>
-        {unit.location && <span className="text-xs text-text-muted">— {unit.location}</span>}
+    <div style={{ marginLeft: level > 0 ? 0 : 0 }}>
+      <div className="flex items-start" style={{ paddingLeft: level === 0 ? 0 : 0 }}>
+        <div className="flex flex-col items-center shrink-0" style={{ width: level > 0 ? 32 : 0 }}>
+          {level > 0 && (
+            <>
+              <div className="w-0.5 bg-border flex-1 min-h-[12px]" />
+              <div className="w-4 h-0.5 bg-border" />
+            </>
+          )}
+        </div>
+        <div
+          className={`flex-1 rounded-lg border border-border bg-bg-card hover:bg-bg-hover transition-colors mb-1 cursor-pointer ${expanded && hasChildren ? 'border-l-accent border-l-2' : ''}`}
+          onClick={() => hasChildren && setExpanded(!expanded)}
+        >
+          <div className="flex items-center gap-2 p-2.5">
+            {hasChildren ? (
+              <span className="text-text-muted shrink-0">
+                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+            ) : (
+              <span className="w-3.5 shrink-0" />
+            )}
+            <Building2 size={14} className="text-accent shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold truncate">{unit.name}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${typeBadge}`}>
+                  {unit.unit_type}
+                </span>
+              </div>
+              {unit.commander_id && (
+                <div className="text-xs text-text-muted mt-0.5">Commander: {unit.commander_id}</div>
+              )}
+            </div>
+            {personCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-accent/15 text-accent border border-accent/25 shrink-0">
+                <Users size={10} /> {personCount}
+              </span>
+            )}
+            {unit.location && (
+              <span className="text-xs text-text-muted shrink-0 hidden sm:inline">{unit.location}</span>
+            )}
+          </div>
+        </div>
       </div>
       {expanded && hasChildren && (
-        <div>
+        <div style={{ paddingLeft: level > 0 ? 0 : 0 }}>
           {unit.children!.map((child) => (
-            <TreeNode key={child.id} unit={child} level={level + 1} />
+            <TreeNode key={child.id} unit={child} level={level + 1} assignments={assignments} />
           ))}
         </div>
       )}
@@ -352,13 +394,13 @@ export default function OrgChartList() {
             </button>
           </div>
           {isLoading && tree.length === 0 ? (
-            <div className="animate-pulse text-center py-8 text-text-muted">Loading...</div>
+            <CardSkeleton />
           ) : tree.length === 0 ? (
             <div className="text-center py-8 text-text-muted">No units configured</div>
           ) : (
             <div className="max-h-96 overflow-y-auto">
               {tree.map((unit) => (
-                <TreeNode key={unit.id} unit={unit} />
+                <TreeNode key={unit.id} unit={unit} assignments={assignments} />
               ))}
             </div>
           )}

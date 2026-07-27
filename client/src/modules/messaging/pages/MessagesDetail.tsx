@@ -6,6 +6,7 @@ import { useMessagingStore } from '../store';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
 import Modal from '../../../components/common/Modal';
 import { FormInput } from '../../../components/common/FormComponents';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const statusColorMap: Record<string, string> = {
   ACTIVE: 'green', ARCHIVED: 'gray', INACTIVE: 'yellow',
@@ -51,7 +52,7 @@ export default function MessagesDetail() {
   };
 
   if (isLoading && !selectedChannel) {
-    return <div className="card text-center py-16"><div className="animate-pulse text-text-muted">Loading...</div></div>;
+    return <DetailSkeleton />;
   }
   if (!selectedChannel) {
     return (

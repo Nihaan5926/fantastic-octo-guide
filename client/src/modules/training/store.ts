@@ -10,6 +10,7 @@ export interface TrainingCourse {
   instructor: string | null;
   is_required: boolean;
   prerequisite_course_id?: string;
+  course_date?: string;
   created_at?: string;
   updated_at?: string;
 }

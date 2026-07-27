@@ -8,6 +8,7 @@ import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
+import { TableSkeleton } from '../../../components/common/LoadingSkeleton';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import FileUpload from '../../../components/common/FileUpload';
@@ -501,8 +502,8 @@ export default function EvidenceList() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={totalCols} className="px-4 py-16 text-center text-text-muted">
-                    <div className="animate-pulse">Loading...</div>
+                  <td colSpan={totalCols} className="p-0">
+                    <TableSkeleton rows={5} cols={totalCols} />
                   </td>
                 </tr>
               ) : items.length === 0 ? (

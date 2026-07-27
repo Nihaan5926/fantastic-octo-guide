@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
@@ -60,7 +61,7 @@ router.get('/packages/:id', async (req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e); }
 });
 
-router.post('/packages', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/packages', auditLog('target:create', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ref = `TGT-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(5, '0')}`;
     const [item] = await db('target_packages').insert({
@@ -79,7 +80,7 @@ router.post('/packages', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
-router.put('/packages/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.put('/packages/:id', auditLog('target:update', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('target_packages')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
@@ -94,7 +95,7 @@ router.put('/packages/:id', async (req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e); }
 });
 
-router.delete('/packages/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/packages/:id', auditLog('target:delete', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('target_packages').where({ id: req.params.id }).del();
     eventBus.emit('entity:deleted', {
@@ -122,7 +123,7 @@ router.get('/packages/:packageId/nominations', async (req: Request, res: Respons
   } catch (e) { next(e); }
 });
 
-router.post('/packages/:packageId/nominations', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/packages/:packageId/nominations', auditLog('target:nominate', 'target_nomination'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('target_nominations').insert({
       id: uuid(),
@@ -165,6 +166,105 @@ router.delete('/nominations/:id', async (req: Request, res: Response, next: Next
       userId: req.user!.userId,
     });
     res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+// ── Targeting Lifecycle ──
+
+const LIFECYCLE: Record<string, string> = {
+  DRAFT: 'NOMINATED',
+  NOMINATED: 'VETTED',
+  VETTED: 'APPROVED',
+  APPROVED: 'EXECUTED',
+  EXECUTED: 'ASSESSED',
+};
+
+router.put('/packages/:id/nominate', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('target_packages').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    if (item.status !== 'DRAFT') {
+      res.status(400).json({ error: 'Only DRAFT packages can be nominated' });
+      return;
+    }
+    const [updated] = await db('target_packages')
+      .where({ id: req.params.id })
+      .update({ status: 'NOMINATED', updated_at: db.fn.now() })
+      .returning('*');
+    eventBus.emit('entity:updated', { entityType: 'target_package', entityId: updated.id, title: updated.title || updated.reference_number, userId: req.user!.userId });
+    res.json(updated);
+  } catch (e) { next(e); }
+});
+
+router.put('/packages/:id/vet', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { vetting_notes } = req.body;
+    const item = await db('target_packages').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    if (item.status !== 'NOMINATED') {
+      res.status(400).json({ error: 'Only NOMINATED packages can be vetted' });
+      return;
+    }
+    const [updated] = await db('target_packages')
+      .where({ id: req.params.id })
+      .update({ status: 'VETTED', vetting_notes: vetting_notes || null, vetted_at: db.fn.now(), updated_at: db.fn.now() })
+      .returning('*');
+    eventBus.emit('entity:updated', { entityType: 'target_package', entityId: updated.id, title: updated.title || updated.reference_number, userId: req.user!.userId });
+    res.json(updated);
+  } catch (e) { next(e); }
+});
+
+router.put('/packages/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('target_packages').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    if (item.status !== 'VETTED') {
+      res.status(400).json({ error: 'Only VETTED packages can be approved' });
+      return;
+    }
+    const [updated] = await db('target_packages')
+      .where({ id: req.params.id })
+      .update({ status: 'APPROVED', approved_by: req.user!.userId, approved_at: db.fn.now(), updated_at: db.fn.now() })
+      .returning('*');
+    eventBus.emit('entity:updated', { entityType: 'target_package', entityId: updated.id, title: updated.title || updated.reference_number, userId: req.user!.userId });
+    res.json(updated);
+  } catch (e) { next(e); }
+});
+
+router.put('/packages/:id/execute', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('target_packages').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    if (item.status !== 'APPROVED') {
+      res.status(400).json({ error: 'Only APPROVED packages can be executed' });
+      return;
+    }
+    const [updated] = await db('target_packages')
+      .where({ id: req.params.id })
+      .update({ status: 'EXECUTED', executed_at: db.fn.now(), updated_at: db.fn.now() })
+      .returning('*');
+    eventBus.emit('entity:updated', { entityType: 'target_package', entityId: updated.id, title: updated.title || updated.reference_number, userId: req.user!.userId });
+    res.json(updated);
+  } catch (e) { next(e); }
+});
+
+router.put('/packages/:id/assess', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bda_results } = req.body;
+    const item = await db('target_packages').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    if (item.status !== 'EXECUTED') {
+      res.status(400).json({ error: 'Only EXECUTED packages can be assessed' });
+      return;
+    }
+    const existingAssessment = item.assessment || {};
+    const updatedAssessment = { ...existingAssessment, bda_results, assessed_at: new Date().toISOString() };
+    const [updated] = await db('target_packages')
+      .where({ id: req.params.id })
+      .update({ status: 'ASSESSED', assessment: updatedAssessment, updated_at: db.fn.now() })
+      .returning('*');
+    eventBus.emit('entity:updated', { entityType: 'target_package', entityId: updated.id, title: updated.title || updated.reference_number, userId: req.user!.userId });
+    res.json(updated);
   } catch (e) { next(e); }
 });
 

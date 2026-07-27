@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useAnalysisStore } from '../store';
+import { analysisApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
@@ -8,7 +9,7 @@ import SearchBar from '../../../components/common/SearchBar';
 import { FormInput, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Trash2, GitGraph, Plus, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Trash2, GitGraph, Plus, ZoomIn, ZoomOut, RotateCcw, Clock, Network, Globe, Grid3X3 } from 'lucide-react';
 
 const relationshipTypeOptions = [
   { value: 'RELATED_TO', label: 'Related To' },
@@ -87,26 +88,69 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
   const [scale, setScale] = useState(0.7);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [draggingNode, setDraggingNode] = useState<GraphNode | null>(null);
+  const [panning, setPanning] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [layout, setLayout] = useState<'force' | 'circular' | 'grid'>(() => {
+    return (localStorage.getItem('graph-layout') as any) || 'force';
+  });
+  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
   const animRef = useRef<number>(0);
   const nodesRef = useRef<GraphNode[]>([]);
   const edgesRef = useRef<GraphEdge[]>([]);
+  const layoutRef = useRef(layout);
+
+  useEffect(() => {
+    localStorage.setItem('graph-layout', layout);
+    layoutRef.current = layout;
+  }, [layout]);
+
+  const applyLayout = useCallback((ns: GraphNode[], es: GraphEdge[], lyt: string) => {
+    const w = 800;
+    const h = 550;
+    const updated = [...ns];
+
+    if (lyt === 'circular') {
+      updated.forEach((n, i) => {
+        n.x = w / 2 + Math.cos((2 * Math.PI * i) / ns.length) * 200;
+        n.y = h / 2 + Math.sin((2 * Math.PI * i) / ns.length) * 200;
+        n.vx = 0; n.vy = 0;
+      });
+    } else if (lyt === 'grid') {
+      const cols = Math.ceil(Math.sqrt(ns.length));
+      updated.forEach((n, i) => {
+        n.x = 100 + (i % cols) * (w - 200) / Math.max(cols - 1, 1);
+        n.y = 80 + Math.floor(i / cols) * (h - 160) / Math.max(Math.ceil(ns.length / cols) - 1, 1);
+        n.vx = 0; n.vy = 0;
+      });
+    } else {
+      updated.forEach((n, i) => {
+        n.x = w / 2 + Math.cos((2 * Math.PI * i) / ns.length) * 180 + (Math.random() - 0.5) * 60;
+        n.y = h / 2 + Math.sin((2 * Math.PI * i) / ns.length) * 180 + (Math.random() - 0.5) * 60;
+      });
+    }
+
+    return updated;
+  }, []);
 
   useEffect(() => {
     if (!rawNodes.length) return;
     const w = 800;
     const h = 550;
-    const initialNodes: GraphNode[] = rawNodes.map((n, i) => ({
-      id: n.id,
-      type: n.type,
-      entityId: n.entityId,
-      x: w / 2 + Math.cos((2 * Math.PI * i) / rawNodes.length) * 180 + (Math.random() - 0.5) * 60,
-      y: h / 2 + Math.sin((2 * Math.PI * i) / rawNodes.length) * 180 + (Math.random() - 0.5) * 60,
-      vx: 0,
-      vy: 0,
-    }));
+    const initialNodes: GraphNode[] = applyLayout(
+      rawNodes.map((n, i) => ({
+        id: n.id,
+        type: n.type,
+        entityId: n.entityId,
+        x: w / 2 + Math.cos((2 * Math.PI * i) / rawNodes.length) * 180 + (Math.random() - 0.5) * 60,
+        y: h / 2 + Math.sin((2 * Math.PI * i) / rawNodes.length) * 180 + (Math.random() - 0.5) * 60,
+        vx: 0,
+        vy: 0,
+      })),
+      [],
+      layout
+    );
     const initialEdges: GraphEdge[] = rawEdges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -118,70 +162,70 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
     setNodes([...initialNodes]);
     setStableEdges([...initialEdges]);
 
-    let iter = 0;
-    const maxIter = 200;
-    const simulate = () => {
-      const ns = nodesRef.current;
-      const es = edgesRef.current;
-      if (iter >= maxIter || ns.length === 0) return;
-      const w2 = 800;
-      const h2 = 550;
-      const damping = 0.85;
-      const repulsion = 3000;
-      const attraction = 0.005;
-      const centerForce = 0.003;
-      const maxVel = 8;
+    if (layout === 'force') {
+      let iter = 0;
+      const maxIter = 200;
+      const simulate = () => {
+        const ns = nodesRef.current;
+        const es = edgesRef.current;
+        if (iter >= maxIter || ns.length === 0 || layoutRef.current !== 'force') return;
+        const damping = 0.85;
+        const repulsion = 3000;
+        const attraction = 0.005;
+        const centerForce = 0.003;
+        const maxVel = 8;
 
-      for (let i = 0; i < ns.length; i++) {
-        for (let j = i + 1; j < ns.length; j++) {
-          const dx = ns[j].x - ns[i].x;
-          const dy = ns[j].y - ns[i].y;
+        for (let i = 0; i < ns.length; i++) {
+          for (let j = i + 1; j < ns.length; j++) {
+            const dx = ns[j].x - ns[i].x;
+            const dy = ns[j].y - ns[i].y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const force = repulsion / (dist * dist);
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            ns[i].vx -= fx;
+            ns[i].vy -= fy;
+            ns[j].vx += fx;
+            ns[j].vy += fy;
+          }
+        }
+
+        for (const edge of es) {
+          const src = ns.find((n) => n.id === edge.source);
+          const tgt = ns.find((n) => n.id === edge.target);
+          if (!src || !tgt) continue;
+          const dx = tgt.x - src.x;
+          const dy = tgt.y - src.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = repulsion / (dist * dist);
+          const force = dist * attraction;
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
-          ns[i].vx -= fx;
-          ns[i].vy -= fy;
-          ns[j].vx += fx;
-          ns[j].vy += fy;
+          src.vx += fx;
+          src.vy += fy;
+          tgt.vx -= fx;
+          tgt.vy -= fy;
         }
-      }
 
-      for (const edge of es) {
-        const src = ns.find((n) => n.id === edge.source);
-        const tgt = ns.find((n) => n.id === edge.target);
-        if (!src || !tgt) continue;
-        const dx = tgt.x - src.x;
-        const dy = tgt.y - src.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = dist * attraction;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        src.vx += fx;
-        src.vy += fy;
-        tgt.vx -= fx;
-        tgt.vy -= fy;
-      }
+        for (const n of ns) {
+          n.vx += (800 / 2 - n.x) * centerForce;
+          n.vy += (550 / 2 - n.y) * centerForce;
+          n.vx = Math.max(-maxVel, Math.min(maxVel, n.vx));
+          n.vy = Math.max(-maxVel, Math.min(maxVel, n.vy));
+          n.x += n.vx;
+          n.y += n.vy;
+          n.vx *= damping;
+          n.vy *= damping;
+        }
 
-      for (const n of ns) {
-        n.vx += (w2 / 2 - n.x) * centerForce;
-        n.vy += (h2 / 2 - n.y) * centerForce;
-        n.vx = Math.max(-maxVel, Math.min(maxVel, n.vx));
-        n.vy = Math.max(-maxVel, Math.min(maxVel, n.vy));
-        n.x += n.vx;
-        n.y += n.vy;
-        n.vx *= damping;
-        n.vy *= damping;
-      }
-
-      iter++;
-      setNodes([...ns]);
+        iter++;
+        setNodes([...ns]);
+        animRef.current = requestAnimationFrame(simulate);
+      };
       animRef.current = requestAnimationFrame(simulate);
-    };
+    }
 
-    animRef.current = requestAnimationFrame(simulate);
     return () => cancelAnimationFrame(animRef.current);
-  }, [rawNodes, rawEdges]);
+  }, [rawNodes, rawEdges, layout, applyLayout]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -205,16 +249,37 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
       ctx.beginPath();
       ctx.moveTo(src.x, src.y);
       ctx.lineTo(tgt.x, tgt.y);
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)';
+      const edgeColor = relTypeColorMap[edge.type] || '#94a3b8';
+      ctx.strokeStyle = `${edgeColor}55`;
       ctx.lineWidth = 1.2;
       ctx.stroke();
+
+      const mx = (src.x + tgt.x) / 2;
+      const my = (src.y + tgt.y) / 2;
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(edge.type, mx, my - 4);
+      ctx.textAlign = 'start';
     }
 
     for (const node of nodes) {
+      if (collapsedNodes.has(node.id)) continue;
       const isHovered = hoveredNode?.id === node.id;
       const isSelected = selectedNode?.id === node.id;
-      const r = isHovered ? 12 : isSelected ? 11 : 8;
+      const edgeCount = stableEdges.filter((e) => e.source === node.id || e.target === node.id).length;
+      const r = isHovered ? 13 : isSelected ? 12 : Math.min(10 + edgeCount * 1.5, 16);
       const color = nodeColorMap[node.type] || '#94a3b8';
+
+      if (edgeCount >= 5) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = `${color}30`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       ctx.beginPath();
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
@@ -226,12 +291,20 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
         ctx.stroke();
       }
 
+      if (edgeCount >= 3 && !(isHovered || isSelected)) {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(edgeCount), node.x, node.y + 3);
+        ctx.textAlign = 'start';
+      }
+
       if (isHovered || isSelected) {
         const label = node.entityId || node.id.split(':').slice(1).join(':') || node.id;
         const shortLabel = label.length > 20 ? label.slice(0, 20) + '...' : label;
         const typeLabel = node.type;
         ctx.font = '11px sans-serif';
-        const textWidth = Math.max(ctx.measureText(shortLabel).width, ctx.measureText(typeLabel).width) + 12;
+        const textWidth = Math.max(ctx.measureText(shortLabel).width, ctx.measureText(typeLabel).width) + 16;
         const boxH = 32;
 
         const bx = node.x - textWidth / 2;
@@ -267,7 +340,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
     }
 
     ctx.restore();
-  }, [nodes, stableEdges, hoveredNode, selectedNode, offset, scale]);
+  }, [nodes, stableEdges, hoveredNode, selectedNode, offset, scale, collapsedNodes]);
 
   useEffect(() => {
     draw();
@@ -288,7 +361,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
     for (const node of nodes) {
       const dx = node.x - world.x;
       const dy = node.y - world.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= 12) return node;
+      if (Math.sqrt(dx * dx + dy * dy) <= 16) return node;
     }
     return null;
   };
@@ -299,7 +372,18 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
 
-    if (dragging) {
+    if (draggingNode) {
+      const world = screenToWorld(sx, sy);
+      setNodes((prev) =>
+        prev.map((n) => (n.id === draggingNode.id ? { ...n, x: world.x, y: world.y } : n))
+      );
+      nodesRef.current = nodesRef.current.map((n) =>
+        n.id === draggingNode.id ? { ...n, x: world.x, y: world.y } : n
+      );
+      return;
+    }
+
+    if (panning) {
       const dx = sx - dragStart.x;
       const dy = sy - dragStart.y;
       setOffset({ x: dragOffset.x + dx, y: dragOffset.y + dy });
@@ -317,20 +401,32 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
     const sy = e.clientY - rect.top;
 
     const node = findNodeAt(sx, sy);
+    if (node && e.shiftKey) {
+      e.preventDefault();
+      setCollapsedNodes((prev) => {
+        const next = new Set(prev);
+        if (next.has(node.id)) next.delete(node.id);
+        else next.add(node.id);
+        return next;
+      });
+      return;
+    }
     if (node) {
+      setDraggingNode(node);
       setSelectedNode(node);
       onFilter(node.id);
     } else {
       setSelectedNode(null);
       onFilter(null);
-      setDragging(true);
+      setPanning(true);
       setDragStart({ x: sx, y: sy });
       setDragOffset({ ...offset });
     }
   };
 
   const handleMouseUp = () => {
-    setDragging(false);
+    setDraggingNode(null);
+    setPanning(false);
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -341,7 +437,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
 
   const handleZoomIn = () => setScale((s) => Math.min(3, s * 1.2));
   const handleZoomOut = () => setScale((s) => Math.max(0.1, s / 1.2));
-  const handleReset = () => { setOffset({ x: 0, y: 0 }); setScale(0.7); setSelectedNode(null); onFilter(null); };
+  const handleReset = () => { setOffset({ x: 0, y: 0 }); setScale(0.7); setSelectedNode(null); onFilter(null); setCollapsedNodes(new Set()); };
 
   return (
     <div className="relative">
@@ -355,6 +451,22 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
           ))}
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setLayout('force')}
+            className={`p-1.5 rounded-lg ${layout === 'force' ? 'bg-accent/20 text-accent' : 'text-text-secondary hover:bg-bg-hover'}`}
+            title="Force-directed layout"
+          ><Network size={16} /></button>
+          <button
+            onClick={() => setLayout('circular')}
+            className={`p-1.5 rounded-lg ${layout === 'circular' ? 'bg-accent/20 text-accent' : 'text-text-secondary hover:bg-bg-hover'}`}
+            title="Circular layout"
+          ><Globe size={16} /></button>
+          <button
+            onClick={() => setLayout('grid')}
+            className={`p-1.5 rounded-lg ${layout === 'grid' ? 'bg-accent/20 text-accent' : 'text-text-secondary hover:bg-bg-hover'}`}
+            title="Grid layout"
+          ><Grid3X3 size={16} /></button>
+          <div className="w-px h-5 bg-border mx-1" />
           <button onClick={handleZoomIn} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary" title="Zoom in"><ZoomIn size={16} /></button>
           <button onClick={handleZoomOut} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary" title="Zoom out"><ZoomOut size={16} /></button>
           <button onClick={handleReset} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary" title="Reset view"><RotateCcw size={16} /></button>
@@ -364,7 +476,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
         ref={canvasRef}
         width={800}
         height={550}
-        className="w-full rounded-lg border border-border bg-bg-tertiary/30 cursor-grab"
+        className="w-full rounded-lg border border-border bg-bg-tertiary/30 cursor-crosshair"
         style={{ height: '550px', width: '100%' }}
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
@@ -373,8 +485,9 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
         onWheel={handleWheel}
       />
       <p className="text-xs text-text-muted mt-2 text-center">
-        Click a node to filter by entity | Scroll to zoom | Drag to pan
+        Drag nodes to reposition | Shift+click to expand/collapse | Scroll to zoom | Drag canvas to pan
         {selectedNode && <span className="ml-2 text-accent">Filtering: {selectedNode.id}</span>}
+        {collapsedNodes.size > 0 && <span className="ml-2 text-amber-400">Collapsed: {collapsedNodes.size}</span>}
       </p>
     </div>
   );
@@ -389,6 +502,9 @@ export default function RelationshipList() {
   const [form, setForm] = useState<RelationshipForm>(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [filterNodeId, setFilterNodeId] = useState<string | null>(null);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [timelineEntityFilter, setTimelineEntityFilter] = useState('');
+  const [allRelationships, setAllRelationships] = useState<any[]>([]);
 
   useEffect(() => {
     fetchList({ page, search, type: typeFilter });
@@ -404,6 +520,12 @@ export default function RelationshipList() {
   useEffect(() => {
     fetchGraph();
     fetchGraphStats();
+  }, []);
+
+  useEffect(() => {
+    analysisApi.list({ limit: 1000 }).then(({ data }: any) => {
+      setAllRelationships(data.data || data.items || []);
+    }).catch(() => {});
   }, []);
 
   const openCreate = () => {
@@ -529,10 +651,88 @@ export default function RelationshipList() {
 
         <div>
           <div className="card">
-            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
-              <GitGraph size={16} /> Relationship Graph
+            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                {showTimeline ? <Clock size={16} /> : <GitGraph size={16} />}
+                {showTimeline ? 'Relationship Timeline' : 'Relationship Graph'}
+              </span>
+              <button
+                onClick={() => setShowTimeline(!showTimeline)}
+                className="text-xs px-3 py-1 rounded-lg bg-bg-tertiary hover:bg-bg-hover text-text-secondary transition-colors"
+              >
+                {showTimeline ? 'Show Graph' : 'Show Timeline'}
+              </button>
             </h3>
-            {graphNodes.length === 0 ? (
+            {showTimeline ? (
+              <div className="max-h-[550px] overflow-y-auto">
+                {allRelationships.length === 0 ? (
+                  <div className="text-center py-12 text-text-muted">
+                    <Clock size={40} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">No relationship data available.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-3">
+                      <FormSelect
+                        label=""
+                        options={sourceTypeOptions}
+                        value={timelineEntityFilter}
+                        onChange={(e) => setTimelineEntityFilter(e.target.value)}
+                        placeholder="Filter by entity type"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="relative pl-6 border-l-2 border-border space-y-4">
+                      {(() => {
+                        let filtered = allRelationships.filter((r: any) => {
+                          if (!timelineEntityFilter) return true;
+                          return r.source_type === timelineEntityFilter || r.target_type === timelineEntityFilter;
+                        });
+                        filtered.sort((a: any, b: any) =>
+                          new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
+                        );
+                        return filtered.length === 0 ? (
+                          <p className="text-xs text-text-muted py-4">No matching relationships</p>
+                        ) : filtered.map((item: any, i: number) => {
+                          const dateStr = item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'short', day: 'numeric',
+                          }) : 'Unknown date';
+                          const timeStr = item.created_at ? new Date(item.created_at).toLocaleTimeString('en-US', {
+                            hour: '2-digit', minute: '2-digit',
+                          }) : '';
+                          const typeColor = relTypeColorMap[item.relationship_type] || 'gray';
+                          const badgeColors: Record<string, string> = {
+                            green: 'bg-green-500/15 text-green-400 border-green-500/25',
+                            red: 'bg-red-500/15 text-red-400 border-red-500/25',
+                            blue: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+                            purple: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+                            yellow: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
+                            gray: 'bg-gray-500/15 text-gray-400 border-gray-500/25',
+                          };
+                          const typeBadge = badgeColors[typeColor] || badgeColors.gray;
+                          return (
+                            <div key={item.id || i} className="relative">
+                              <div className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-bg-card" />
+                              <div className={`inline-block px-2 py-0.5 rounded text-xs font-medium border mb-1 ${typeBadge}`}>
+                                {item.relationship_type.replace(/_/g, ' ')}
+                              </div>
+                              <div className="text-xs text-text-secondary flex items-center gap-1 flex-wrap">
+                                <span className="font-medium text-text-primary">{item.source_type}:{item.source_id}</span>
+                                <span className="text-text-muted">→</span>
+                                <span className="font-medium text-text-primary">{item.target_type}:{item.target_id}</span>
+                              </div>
+                              <div className="text-[11px] text-text-muted mt-0.5">
+                                {dateStr} {timeStr && `· ${timeStr}`}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : graphNodes.length === 0 ? (
               <div className="text-center py-12 text-text-muted">
                 <GitGraph size={40} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No graph data available. Create relationships to visualize connections.</p>

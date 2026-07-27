@@ -1,11 +1,111 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
+import { logger } from '../../utils/logger';
 
 const router = Router();
 router.use(authenticate);
+
+// ── Scheduler ──
+
+let schedulerInterval: NodeJS.Timeout | null = null;
+const trackedTasks = new Set<string>();
+
+function getNextRunTime(schedule: string): Date | null {
+  const now = new Date();
+  switch (schedule) {
+    case 'HOURLY': {
+      const next = new Date(now);
+      next.setHours(next.getHours() + 1, 0, 0, 0);
+      return next;
+    }
+    case 'EVERY_6_HOURS': {
+      const next = new Date(now);
+      const currentHour = next.getHours();
+      const nextSlot = Math.ceil((currentHour + 1) / 6) * 6;
+      next.setHours(nextSlot, 0, 0, 0);
+      return next;
+    }
+    case 'DAILY': {
+      const next = new Date(now);
+      next.setDate(next.getDate() + 1);
+      next.setHours(0, 0, 0, 0);
+      return next;
+    }
+    case 'WEEKLY': {
+      const next = new Date(now);
+      next.setDate(next.getDate() + 7);
+      next.setHours(0, 0, 0, 0);
+      return next;
+    }
+    default: return null;
+  }
+}
+
+export function startScheduler() {
+  if (schedulerInterval) return;
+  schedulerInterval = setInterval(async () => {
+    try {
+      const now = new Date();
+      const tasks = await db('osint_collection_tasks')
+        .whereNot('status', 'RUNNING')
+        .whereRaw("metadata->>'schedule' IS NOT NULL");
+
+      for (const task of tasks) {
+        const metadata = typeof task.metadata === 'string' ? JSON.parse(task.metadata || '{}') : (task.metadata || {});
+        const schedule = metadata.schedule;
+        const enabled = metadata.scheduleEnabled !== false;
+        if (!enabled || !schedule || schedule === 'MANUAL') continue;
+
+        const nextRunAt = metadata.next_run_at ? new Date(metadata.next_run_at) : null;
+        if (nextRunAt && now >= nextRunAt) {
+          logger.info(`Scheduled OSINT task triggered: ${task.title || task.id}`, { taskId: task.id, schedule });
+          await db('osint_collection_tasks').where({ id: task.id }).update({
+            status: 'RUNNING', last_run_at: db.fn.now(),
+          });
+
+          // Simulate collection
+          const sampleResults = [
+            { title: 'Scheduled result from source', url: 'https://example.com/scheduled-article', content_snippet: 'Automatically collected intelligence data...' },
+          ];
+          for (const result of sampleResults) {
+            await db('osint_collected_items').insert({
+              id: uuid(), task_id: task.id, title: result.title, url: result.url,
+              content_snippet: result.content_snippet, source_type: 'NEWS',
+            });
+          }
+          await db('osint_collection_tasks').where({ id: task.id }).update({
+            status: 'COMPLETED',
+          });
+          const [{ count }] = await db('osint_collected_items').where({ task_id: task.id }).count('id as count');
+          await db('osint_collection_tasks').where({ id: task.id }).update({ results_count: parseInt(String(count), 10) });
+
+          const nextRun = getNextRunTime(schedule);
+          const currentTaskMeta = typeof task.metadata === 'string' ? JSON.parse(task.metadata || '{}') : (task.metadata || {});
+          await db('osint_collection_tasks').where({ id: task.id }).update({
+            metadata: JSON.stringify({ ...currentTaskMeta, schedule, scheduleEnabled: true, next_run_at: nextRun ? nextRun.toISOString() : null }),
+          });
+
+          logger.info(`Scheduled OSINT task completed: ${task.title || task.id}`, { taskId: task.id });
+        }
+      }
+    } catch (e) {
+      logger.error('OSINT scheduler error', { error: e });
+    }
+  }, 60000); // Check every 60 seconds
+  logger.info('OSINT scheduler started');
+}
+
+export function stopScheduler() {
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+    schedulerInterval = null;
+    logger.info('OSINT scheduler stopped');
+  }
+}
 
 router.get('/tasks', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -100,8 +200,9 @@ router.post('/tasks/:id/run', async (req: Request, res: Response, next: NextFunc
 
     await db('osint_collection_tasks').where({ id: req.params.id }).update({
       status: 'COMPLETED',
-      results_count: db.raw('(SELECT COUNT(*) FROM osint_collected_items WHERE task_id = ?)', [req.params.id]),
     });
+    const [{ count }] = await db('osint_collected_items').where({ task_id: req.params.id }).count('id as count');
+    await db('osint_collection_tasks').where({ id: req.params.id }).update({ results_count: parseInt(String(count), 10) });
 
     res.json({ message: 'Task completed', resultsCollected: sampleResults.length });
   } catch (e) { next(e); }
@@ -119,6 +220,45 @@ router.get('/tasks/:id/results', async (req: Request, res: Response, next: NextF
     ]);
 
     res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (e) { next(e); }
+});
+
+// ── Scheduler Management ──
+
+router.put('/tasks/:id/schedule', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { schedule, enabled } = req.body;
+    if (!schedule) {
+      res.status(400).json({ error: 'schedule is required' });
+      return;
+    }
+
+    const validSchedules = ['MANUAL', 'HOURLY', 'EVERY_6_HOURS', 'DAILY', 'WEEKLY'];
+    if (!validSchedules.includes(schedule)) {
+      res.status(400).json({ error: `Invalid schedule. Must be one of: ${validSchedules.join(', ')}` });
+      return;
+    }
+
+    const task = await db('osint_collection_tasks').where({ id: req.params.id }).first();
+    if (!task) { res.status(404).json({ error: 'Task not found' }); return; }
+
+    const scheduleEnabled = enabled !== false;
+    const nextRunAt = scheduleEnabled && schedule !== 'MANUAL' ? getNextRunTime(schedule) : null;
+
+    const existingMeta = typeof task.metadata === 'string' ? JSON.parse(task.metadata || '{}') : (task.metadata || {});
+    await db('osint_collection_tasks').where({ id: req.params.id }).update({
+      metadata: JSON.stringify({
+        ...existingMeta,
+        schedule,
+        scheduleEnabled,
+        next_run_at: nextRunAt ? nextRunAt.toISOString() : null,
+      }),
+    });
+    if (scheduleEnabled && schedule !== 'MANUAL') trackedTasks.add(req.params.id);
+    else trackedTasks.delete(req.params.id);
+
+    const [updated] = await db('osint_collection_tasks').where({ id: req.params.id }).returning('*');
+    res.json(updated);
   } catch (e) { next(e); }
 });
 

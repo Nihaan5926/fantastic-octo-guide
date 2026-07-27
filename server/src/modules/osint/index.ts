@@ -1,5 +1,6 @@
 import type { Module } from '../../core/types';
 import router from './router';
+import { startScheduler } from './router';
 
 const manifest = {
   name: 'osint',
@@ -16,5 +17,12 @@ const manifest = {
   globalSearchEnabled: true,
 } as const;
 
-const mod: Module = { manifest, router, migrations: [] };
+const mod: Module = {
+  manifest,
+  router,
+  migrations: [],
+  register: () => {
+    startScheduler();
+  },
+};
 export default mod;

@@ -5,11 +5,13 @@ import { useReportStore } from '../store';
 import { reportsApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 import { FormTextarea } from '../../../components/common/FormComponents';
 import Modal from '../../../components/common/Modal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import FileUpload from '../../../components/common/FileUpload';
-import { ArrowLeft, Send, Printer, Share2, Plus, Trash2, Download, File, Paperclip } from 'lucide-react';
+import RichTextEditor from '../../../components/common/RichTextEditor';
+import { ArrowLeft, Send, Printer, Share2, Plus, Trash2, Download, File, Paperclip, CheckCircle, XCircle, Edit3 } from 'lucide-react';
 
 const STATUS_FLOW = ['DRAFT', 'IN_REVIEW', 'APPROVED', 'DISSEMINATED'];
 
@@ -29,6 +31,9 @@ export default function ReportsDetail() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deleteAttachId, setDeleteAttachId] = useState<string | null>(null);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [workflowLoading, setWorkflowLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -148,15 +153,42 @@ export default function ReportsDetail() {
     });
   };
 
-  const handleStatusChange = async () => {
-    if (!nextStatus) return;
+  const handleSubmit = async () => {
+    if (!id) return;
+    setWorkflowLoading(true);
     try {
-      await update(id!, { status: nextStatus });
-      toast.success(`Status advanced to ${nextStatus}`);
-      fetchOne(id!);
-    } catch {
-      toast.error('Failed to update status');
-    }
+      await reportsApi.submit(id);
+      toast.success('Report submitted for review');
+      fetchOne(id);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Submit failed');
+    } finally { setWorkflowLoading(false); }
+  };
+
+  const handleApprove = async () => {
+    if (!id) return;
+    setWorkflowLoading(true);
+    try {
+      await reportsApi.approve(id);
+      toast.success('Report approved');
+      fetchOne(id);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Approve failed');
+    } finally { setWorkflowLoading(false); }
+  };
+
+  const handleReject = async () => {
+    if (!id || !rejectionReason.trim()) return;
+    setWorkflowLoading(true);
+    try {
+      await reportsApi.reject(id, rejectionReason);
+      toast.success('Report rejected');
+      setRejectModalOpen(false);
+      setRejectionReason('');
+      fetchOne(id);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Reject failed');
+    } finally { setWorkflowLoading(false); }
   };
 
   const handleAddComment = async () => {
@@ -186,11 +218,7 @@ export default function ReportsDetail() {
   }, [comments]);
 
   if (isLoading && !selected) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-pulse text-text-muted">Loading report...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!selected) {
@@ -236,7 +264,6 @@ export default function ReportsDetail() {
               {STATUS_FLOW.map((status, idx) => {
                 const isCompleted = currentIdx > idx;
                 const isCurrent = currentIdx === idx;
-                const isPending = currentIdx < idx;
                 return (
                   <React.Fragment key={status}>
                     <div className="flex flex-col items-center flex-1">
@@ -249,7 +276,7 @@ export default function ReportsDetail() {
                             : 'bg-bg-tertiary border-border text-text-muted'
                         }`}
                       >
-                        {isCompleted ? '✓' : idx + 1}
+                        {isCompleted ? '\u2713' : idx + 1}
                       </div>
                       <span className={`text-xs mt-1 ${isCurrent ? 'text-text-primary font-semibold' : 'text-text-muted'}`}>
                         {status.replace('_', ' ')}
@@ -262,13 +289,58 @@ export default function ReportsDetail() {
                 );
               })}
             </div>
-            {nextStatus && (
-              <div className="mt-4 flex justify-end">
-                <button onClick={handleStatusChange} disabled={isSubmitting} className="btn-primary text-sm">
-                  {isSubmitting ? 'Updating...' : `Advance to ${nextStatus.replace('_', ' ')}`}
-                </button>
+
+            {/* Rejection reason */}
+            {(selected as any)?.rejection_reason && selected?.status === 'DRAFT' && (
+              <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1">Rejected - Reason:</p>
+                <p className="text-sm text-red-300">{(selected as any).rejection_reason}</p>
               </div>
             )}
+
+            {/* Approval badge */}
+            {selected?.status === 'APPROVED' && (selected as any)?.approved_by && (
+              <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2">
+                <CheckCircle size={16} className="text-emerald-400" />
+                <div>
+                  <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Approved</p>
+                  <p className="text-sm text-emerald-300">
+                    {(selected as any)?.approved_by_first || (selected as any)?.approved_by_last
+                      ? `by ${[(selected as any)?.approved_by_first, (selected as any)?.approved_by_last].filter(Boolean).join(' ')}`
+                      : 'by reviewer'}
+                    {selected?.approved_at && ` on ${new Date((selected as any).approved_at).toLocaleDateString()}`}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="mt-4 flex justify-end gap-2">
+              {selected?.status === 'DRAFT' && !(selected as any)?.rejection_reason && (
+                <button onClick={handleSubmit} disabled={workflowLoading} className="btn-primary text-sm flex items-center gap-1">
+                  <Send size={14} />
+                  {workflowLoading ? 'Submitting...' : 'Submit for Review'}
+                </button>
+              )}
+              {selected?.status === 'DRAFT' && (selected as any)?.rejection_reason && (
+                <button onClick={handleSubmit} disabled={workflowLoading} className="btn-primary text-sm flex items-center gap-1">
+                  <Edit3 size={14} />
+                  {workflowLoading ? 'Submitting...' : 'Resubmit for Review'}
+                </button>
+              )}
+              {selected?.status === 'IN_REVIEW' && (
+                <>
+                  <button onClick={handleApprove} disabled={workflowLoading} className="btn-primary text-sm flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700">
+                    <CheckCircle size={14} />
+                    {workflowLoading ? 'Approving...' : 'Approve'}
+                  </button>
+                  <button onClick={() => setRejectModalOpen(true)} disabled={workflowLoading} className="btn-secondary text-sm flex items-center gap-1 border-red-500/30 text-red-400 hover:bg-red-500/10">
+                    <XCircle size={14} />
+                    {workflowLoading ? 'Rejecting...' : 'Reject'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {selected.summary && (
@@ -280,9 +352,10 @@ export default function ReportsDetail() {
 
           <div className="card">
             <h2 className="text-lg font-semibold mb-2">Content</h2>
-            <pre className="text-xs text-text-secondary bg-bg-tertiary rounded-lg p-4 overflow-auto max-h-96">
-              {JSON.stringify(selected.content, null, 2)}
-            </pre>
+            <RichTextEditor
+              content={typeof selected.content === 'string' ? selected.content : JSON.stringify(selected.content)}
+              editable={false}
+            />
           </div>
         </div>
 
@@ -306,6 +379,12 @@ export default function ReportsDetail() {
                 <div>
                   <dt className="text-text-muted text-xs uppercase tracking-wider">Published</dt>
                   <dd className="text-text-primary">{formatDate(selected.published_at)}</dd>
+                </div>
+              )}
+              {(selected as any)?.submitted_at && (
+                <div>
+                  <dt className="text-text-muted text-xs uppercase tracking-wider">Submitted</dt>
+                  <dd className="text-text-primary">{formatDate((selected as any).submitted_at)}</dd>
                 </div>
               )}
             </dl>
@@ -429,6 +508,24 @@ export default function ReportsDetail() {
         message="Are you sure you want to delete this attachment? This action cannot be undone."
         isLoading={false}
       />
+
+      <Modal isOpen={rejectModalOpen} onClose={() => setRejectModalOpen(false)} title="Reject Report" size="sm">
+        <div className="space-y-4">
+          <FormTextarea
+            label="Rejection Reason"
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="Explain why this report is being rejected..."
+            rows={4}
+          />
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={() => setRejectModalOpen(false)} className="btn-secondary" disabled={workflowLoading}>Cancel</button>
+          <button onClick={handleReject} disabled={!rejectionReason.trim() || workflowLoading} className="btn-primary bg-red-600 hover:bg-red-700">
+            {workflowLoading ? 'Rejecting...' : 'Reject'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

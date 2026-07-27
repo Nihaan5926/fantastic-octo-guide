@@ -13,6 +13,7 @@ import Modal from '../../../components/common/Modal';
 import { ArrowLeft, Plus, X, UserPlus, Trash2, Link2, ListChecks, Download, File, Paperclip } from 'lucide-react';
 import FileUpload from '../../../components/common/FileUpload';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { DetailSkeleton, CardSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const statusColorMap: Record<string, string> = {
   OPEN: 'blue', IN_PROGRESS: 'yellow', PENDING_REVIEW: 'purple', CLOSED: 'green',
@@ -283,11 +284,7 @@ export default function CasesDetail() {
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleString() : '—';
 
   if (isLoading && !selected) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-pulse text-text-muted">Loading case...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!selected) {
@@ -508,9 +505,7 @@ export default function CasesDetail() {
       {activeTab === 'timeline' && (
         <div className="space-y-4">
           {timelineLoading ? (
-            <div className="card text-center py-12">
-              <div className="animate-pulse text-text-muted">Loading timeline...</div>
-            </div>
+            <CardSkeleton />
           ) : timeline.length === 0 ? (
             <div className="card text-center py-12 text-text-muted">No activity recorded yet.</div>
           ) : (
@@ -557,9 +552,7 @@ export default function CasesDetail() {
             </button>
           </div>
           {tasksLoading ? (
-            <div className="card text-center py-12">
-              <div className="animate-pulse text-text-muted">Loading tasks...</div>
-            </div>
+            <CardSkeleton />
           ) : tasks.length === 0 ? (
             <div className="card text-center py-12">
               <ListChecks size={32} className="mx-auto mb-3 text-text-muted" />
@@ -652,7 +645,7 @@ export default function CasesDetail() {
 
       <Modal isOpen={linkEvidenceOpen} onClose={() => setLinkEvidenceOpen(false)} title="Link Evidence to Case" size="md">
         {allEvidenceLoading ? (
-          <div className="text-center py-8 text-text-muted animate-pulse">Loading evidence...</div>
+          <CardSkeleton />
         ) : (
           <div className="space-y-4">
             <FormSelect

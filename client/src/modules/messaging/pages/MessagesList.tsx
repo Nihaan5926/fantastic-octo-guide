@@ -10,6 +10,8 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { FormInput, FormSelect, FormTextarea } from '../../../components/common/FormComponents';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
 import { useMessagingStore } from '../store';
+import { CardSkeleton } from '../../../components/common/LoadingSkeleton';
+import { socket } from '../../../core/socket';
 
 const defaultChannel = { name: '', description: '', channel_type: 'TEAM' };
 
@@ -24,8 +26,45 @@ export default function MessagesList() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    socket.connect();
+    socket.on('message:new', (msg: any) => {
+      if (store.selectedChannel && msg.channel_id === store.selectedChannel.id) {
+        store.fetchMessages(store.selectedChannel.id);
+      }
+    });
+    socket.on('typing:start', (data: any) => {
+      if (store.selectedChannel && data.channelId === store.selectedChannel.id) {
+        setTypingUsers((prev) => {
+          if (prev.includes(data.userId)) return prev;
+          return [...prev, data.userId];
+        });
+      }
+    });
+    socket.on('typing:stop', (data: any) => {
+      if (store.selectedChannel && data.channelId === store.selectedChannel.id) {
+        setTypingUsers((prev) => prev.filter((u) => u !== data.userId));
+      }
+    });
+
+    return () => {
+      socket.off('message:new');
+      socket.off('typing:start');
+      socket.off('typing:stop');
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (store.selectedChannel) {
+      socket.emit('channel:join', { channelId: store.selectedChannel.id });
+    }
+  }, [store.selectedChannel]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -117,9 +156,26 @@ export default function MessagesList() {
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !store.selectedChannel) return;
-    await store.sendMessage(store.selectedChannel.id, { body: messageText, subject: messageText.slice(0, 50) });
+    const channelId = store.selectedChannel.id;
+    socket.emit('message:send', {
+      channel_id: channelId,
+      body: messageText,
+      subject: messageText.slice(0, 50),
+    });
     setMessageText('');
+    socket.emit('typing:stop', { channelId });
     toast.success('Message sent');
+    setTimeout(() => store.fetchMessages(channelId), 300);
+  };
+
+  const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessageText(e.target.value);
+    if (!store.selectedChannel) return;
+    socket.emit('typing:start', { channelId: store.selectedChannel.id });
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      socket.emit('typing:stop', { channelId: store.selectedChannel?.id });
+    }, 2000);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -176,7 +232,7 @@ export default function MessagesList() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {store.isLoading && store.channels.length === 0 ? (
-            <div className="p-4 text-center text-text-muted text-sm animate-pulse">Loading channels...</div>
+            <CardSkeleton />
           ) : store.channels.length === 0 ? (
             <div className="p-4 text-center text-text-muted text-sm">No channels found</div>
           ) : (
@@ -234,7 +290,7 @@ export default function MessagesList() {
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {store.isLoading ? (
-                <div className="text-center text-text-muted py-8 animate-pulse">Loading messages...</div>
+                <CardSkeleton />
               ) : store.messages.length === 0 ? (
                 <div className="text-center text-text-muted py-8">No messages yet. Start the conversation.</div>
               ) : (
@@ -258,13 +314,21 @@ export default function MessagesList() {
               <div ref={messagesEndRef} />
             </div>
 
+            {typingUsers.length > 0 && (
+              <div className="px-4 pb-1">
+                <span className="text-xs text-text-muted italic">
+                  {typingUsers.length === 1 ? 'Someone is typing...' : `${typingUsers.length} people are typing...`}
+                </span>
+              </div>
+            )}
+
             <div className="p-4 border-t border-border">
               <div className="flex items-end gap-2">
-                <textarea
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type a message..."
+                  <textarea
+                    value={messageText}
+                    onChange={handleTyping}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Type a message..."
                   className="input min-h-[40px] resize-none flex-1"
                   rows={2}
                   disabled={store.isSaving}

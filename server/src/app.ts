@@ -12,6 +12,7 @@ import { eventBus } from './core/event-bus';
 import { createWebSocketServer, getIO } from './websocket';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import { authenticate } from './middleware/auth';
+import { generalLimiter } from './middleware/rate-limiter';
 
 export async function createApp() {
   const app = express();
@@ -36,6 +37,9 @@ export async function createApp() {
 
   const moduleDir = path.resolve(__dirname, 'modules');
   await moduleRegistry.loadAll(moduleDir, { db, io, eventBus });
+
+  // Apply general rate limiter to all API routes (100 req/min per IP)
+  app.use('/api', generalLimiter);
 
   // Mount all module routers
   for (const mod of moduleRegistry.getAll()) {
@@ -63,7 +67,18 @@ export async function createApp() {
 
   // Health check
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      db: 'connected',
+      uptime: process.uptime(),
+      memory: {
+        heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      },
+      modules: moduleRegistry.getAll().length,
+    });
   });
 
   // SPA fallback — serve index.html for all non-API routes

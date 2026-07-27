@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft } from 'lucide-react';
 import { watchCenterApi } from '../api';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const statusColorMap: Record<string, string> = {
   DRAFT: 'yellow', SUBMITTED: 'blue', APPROVED: 'green', REJECTED: 'red',
@@ -26,7 +27,7 @@ export default function WatchDetail() {
   }, [id]);
 
   if (loading) {
-    return <div className="card text-center py-16"><div className="animate-pulse text-text-muted">Loading...</div></div>;
+    return <DetailSkeleton />;
   }
   if (!sitreps) {
     return (

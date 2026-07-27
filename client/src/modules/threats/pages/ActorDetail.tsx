@@ -8,8 +8,9 @@ import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
 import { FormInput, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge } from '../../../components/common/Badges';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Trash2, ArrowLeft, Plus, Download, Activity, Clock, File, Paperclip } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, Download, Activity, Clock, File, Paperclip, Search, X, RefreshCw } from 'lucide-react';
 import FileUpload from '../../../components/common/FileUpload';
 
 const statusColorMap: Record<string, string> = {
@@ -118,6 +119,68 @@ const relTypeColorMap: Record<string, string> = {
   ATTRIBUTED_TO: 'yellow', LOCATED_IN: 'green',
 };
 
+const ATTACK_TECHNIQUES = [
+  { id: 'T1566', name: 'Phishing', tactic: 'Initial Access', category: 'initial_access' },
+  { id: 'T1190', name: 'Exploit Public-Facing Application', tactic: 'Initial Access', category: 'initial_access' },
+  { id: 'T1078', name: 'Valid Accounts', tactic: 'Initial Access', category: 'initial_access' },
+  { id: 'T1059', name: 'Command and Scripting Interpreter', tactic: 'Execution', category: 'execution' },
+  { id: 'T1203', name: 'Exploitation for Client Execution', tactic: 'Execution', category: 'execution' },
+  { id: 'T1204', name: 'User Execution', tactic: 'Execution', category: 'execution' },
+  { id: 'T1547', name: 'Boot or Logon Autostart Execution', tactic: 'Persistence', category: 'persistence' },
+  { id: 'T1098', name: 'Account Manipulation', tactic: 'Persistence', category: 'persistence' },
+  { id: 'T1543', name: 'Create or Modify System Process', tactic: 'Persistence', category: 'persistence' },
+  { id: 'T1055', name: 'Process Injection', tactic: 'Privilege Escalation', category: 'privilege_escalation' },
+  { id: 'T1068', name: 'Exploitation for Privilege Escalation', tactic: 'Privilege Escalation', category: 'privilege_escalation' },
+  { id: 'T1562', name: 'Impair Defenses', tactic: 'Defense Evasion', category: 'defense_evasion' },
+  { id: 'T1070', name: 'Indicator Removal', tactic: 'Defense Evasion', category: 'defense_evasion' },
+  { id: 'T1027', name: 'Obfuscated Files or Information', tactic: 'Defense Evasion', category: 'defense_evasion' },
+  { id: 'T1003', name: 'OS Credential Dumping', tactic: 'Credential Access', category: 'credential_access' },
+  { id: 'T1552', name: 'Unsecured Credentials', tactic: 'Credential Access', category: 'credential_access' },
+  { id: 'T1082', name: 'System Information Discovery', tactic: 'Discovery', category: 'discovery' },
+  { id: 'T1046', name: 'Network Service Scanning', tactic: 'Discovery', category: 'discovery' },
+  { id: 'T1049', name: 'System Network Connections Discovery', tactic: 'Discovery', category: 'discovery' },
+  { id: 'T1486', name: 'Data Encrypted for Impact', tactic: 'Impact', category: 'impact' },
+  { id: 'T1490', name: 'Inhibit System Recovery', tactic: 'Impact', category: 'impact' },
+  { id: 'T1071', name: 'Application Layer Protocol', tactic: 'Command and Control', category: 'c2' },
+  { id: 'T1105', name: 'Ingress Tool Transfer', tactic: 'Command and Control', category: 'c2' },
+  { id: 'T1041', name: 'Exfiltration Over C2 Channel', tactic: 'Exfiltration', category: 'exfiltration' },
+  { id: 'T1567', name: 'Exfiltration Over Web Service', tactic: 'Exfiltration', category: 'exfiltration' },
+  { id: 'T1210', name: 'Exploitation of Remote Services', tactic: 'Lateral Movement', category: 'lateral_movement' },
+  { id: 'T1021', name: 'Remote Services', tactic: 'Lateral Movement', category: 'lateral_movement' },
+  { id: 'T1112', name: 'Modify Registry', tactic: 'Defense Evasion', category: 'defense_evasion' },
+  { id: 'T1106', name: 'Native API', tactic: 'Execution', category: 'execution' },
+  { id: 'T1036', name: 'Masquerading', tactic: 'Defense Evasion', category: 'defense_evasion' },
+];
+
+const TACTIC_COLORS: Record<string, string> = {
+  initial_access: 'red',
+  execution: 'orange',
+  persistence: 'yellow',
+  privilege_escalation: 'amber',
+  defense_evasion: 'blue',
+  credential_access: 'violet',
+  discovery: 'indigo',
+  lateral_movement: 'teal',
+  collection: 'pink',
+  c2: 'purple',
+  exfiltration: 'emerald',
+  impact: 'red',
+};
+
+const TACTIC_BG: Record<string, string> = {
+  red: 'bg-red-500/15 border-red-500/30 text-red-400',
+  orange: 'bg-orange-500/15 border-orange-500/30 text-orange-400',
+  yellow: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400',
+  amber: 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+  blue: 'bg-blue-500/15 border-blue-500/30 text-blue-400',
+  violet: 'bg-violet-500/15 border-violet-500/30 text-violet-400',
+  indigo: 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400',
+  teal: 'bg-teal-500/15 border-teal-500/30 text-teal-400',
+  pink: 'bg-pink-500/15 border-pink-500/30 text-pink-400',
+  purple: 'bg-purple-500/15 border-purple-500/30 text-purple-400',
+  emerald: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+};
+
 export default function ActorDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -135,6 +198,11 @@ export default function ActorDetail() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deleteAttachId, setDeleteAttachId] = useState<string | null>(null);
+  const [ttpSearch, setTtpSearch] = useState('');
+  const [ttpSearchOpen, setTtpSearchOpen] = useState(false);
+  const [actorTtps, setActorTtps] = useState<any[]>([]);
+  const [riskBreakdown, setRiskBreakdown] = useState<any>(null);
+  const [recalculating, setRecalculating] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -255,22 +323,177 @@ export default function ActorDetail() {
     return Math.round(sophWeight * 0.5 + avgConf * 0.5);
   }, [selectedActor?.sophistication, indicators]);
 
+  const handleRecalculateRisk = async () => {
+    if (!id) return;
+    setRecalculating(true);
+    try {
+      const { data } = await threatsApi.calculateRisk(id);
+      setRiskBreakdown(data.breakdown);
+      toast.success(`Risk score: ${data.risk_score}`);
+      fetchActor(id);
+      fetchActorSummary(id);
+    } catch {
+      toast.error('Recalculation failed');
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   const threatLevel = riskScore < 30 ? 'LOW' : riskScore < 60 ? 'MODERATE' : 'HIGH';
   const threatLevelColor = riskScore < 30 ? 'text-emerald-400' : riskScore < 60 ? 'text-amber-400' : 'text-red-400';
   const threatBorderColor = riskScore < 30 ? 'border-emerald-500/30' : riskScore < 60 ? 'border-amber-500/30' : 'border-red-500/30';
 
   const ttps = useMemo(() => {
+    if (actorTtps.length > 0) return actorTtps;
     const metadata = selectedActor?.metadata || selectedActor?.entity_custom_fields;
     if (!metadata) return [];
     if (Array.isArray(metadata)) return metadata;
     if (typeof metadata === 'object') {
-      const ttp = metadata.ttp || metadata.TTP || metadata.tactics_techniques_procedures;
+      const ttp = metadata.ttp || metadata.TTP || metadata.tactics_techniques_procedures || metadata.ttps;
       if (Array.isArray(ttp)) return ttp;
-      if (typeof ttp === 'string') return [ttp];
-      return Object.values(metadata).filter((v) => typeof v === 'string');
+      if (typeof ttp === 'string') return [{ id: '', name: ttp, tactic: 'Unknown', category: 'unknown' }];
     }
     return [];
-  }, [selectedActor]);
+  }, [selectedActor, actorTtps]);
+
+  useEffect(() => {
+    const loaded = ttps;
+    if (loaded.length > 0) {
+      const enriched = loaded.map((t: any) => {
+        if (typeof t === 'string') {
+          const match = ATTACK_TECHNIQUES.find((at) => at.id === t || at.name === t);
+          return match || { id: t, name: t, tactic: 'Unknown', category: 'unknown' };
+        }
+        return t;
+      });
+      setActorTtps(enriched);
+    }
+  }, [selectedActor?.metadata, selectedActor?.entity_custom_fields]);
+
+  const handleAddTtp = async (technique: typeof ATTACK_TECHNIQUES[0]) => {
+    const newTtps = [...actorTtps, technique];
+    setActorTtps(newTtps);
+    setTtpSearch('');
+    setTtpSearchOpen(false);
+    if (id) {
+      try {
+        await threatsApi.updateActor(id, {
+          metadata: { ...(selectedActor?.metadata || {}), ttps: newTtps.map((t) => ({ id: t.id, name: t.name, tactic: t.tactic })) },
+        });
+        toast.success('TTP added');
+      } catch {
+        toast.error('Failed to save TTP');
+      }
+    }
+  };
+
+  const handleRemoveTtp = async (techniqueId: string) => {
+    const newTtps = actorTtps.filter((t: any) => t.id !== techniqueId);
+    setActorTtps(newTtps);
+    if (id) {
+      try {
+        await threatsApi.updateActor(id, {
+          metadata: { ...(selectedActor?.metadata || {}), ttps: newTtps.map((t: any) => ({ id: t.id, name: t.name, tactic: t.tactic })) },
+        });
+        toast.success('TTP removed');
+      } catch {
+        toast.error('Failed to save TTP');
+      }
+    }
+  };
+
+  const filteredTtps = ttpSearch
+    ? ATTACK_TECHNIQUES.filter((t) =>
+        t.name.toLowerCase().includes(ttpSearch.toLowerCase()) ||
+        t.id.toLowerCase().includes(ttpSearch.toLowerCase()) ||
+        t.tactic.toLowerCase().includes(ttpSearch.toLowerCase())
+      )
+    : ATTACK_TECHNIQUES;
+
+  const handleExportSTIX = () => {
+    if (!selectedActor) return;
+    const bundle: any = {
+      type: 'bundle',
+      id: `bundle--${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`,
+      spec_version: '2.1',
+      objects: [],
+    };
+
+    const actorId = `threat-actor--${selectedActor.id || Math.random().toString(36).slice(2)}`;
+    const actorObj: any = {
+      type: 'threat-actor',
+      id: actorId,
+      created: selectedActor.created_at || new Date().toISOString(),
+      modified: selectedActor.updated_at || new Date().toISOString(),
+      name: selectedActor.name || 'Unnamed Actor',
+      threat_actor_types: [],
+      aliases: Array.isArray(selectedActor.aliases) ? selectedActor.aliases : [],
+      sophistication: selectedActor.sophistication?.toLowerCase() || 'unknown',
+      resource_level: 'unknown',
+      primary_motivation: selectedActor.motivation || 'unknown',
+    };
+    bundle.objects.push(actorObj);
+
+    indicators.forEach((ind: any, idx: number) => {
+      const indId = `indicator--${ind.id || idx}`;
+      const indObj: any = {
+        type: 'indicator',
+        id: indId,
+        created: ind.created_at || new Date().toISOString(),
+        modified: ind.updated_at || ind.created_at || new Date().toISOString(),
+        name: `${ind.type}: ${ind.value}`,
+        pattern: `[${ind.type === 'IP' ? 'ipv4-addr:value' : ind.type === 'DOMAIN' ? 'domain-name:value' : ind.type === 'URL' ? 'url:value' : ind.type === 'HASH' ? 'file:hashes' : 'x-custom'} = '${ind.value}']`,
+        pattern_type: 'stix',
+        valid_from: ind.created_at || new Date().toISOString(),
+        indicator_types: ['malicious-activity'],
+      };
+      bundle.objects.push(indObj);
+
+      bundle.objects.push({
+        type: 'relationship',
+        id: `relationship--${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        relationship_type: 'indicates',
+        source_ref: indId,
+        target_ref: actorId,
+      });
+    });
+
+    actorTtps.forEach((ttp: any) => {
+      const attackId = `attack-pattern--${ttp.id || Math.random().toString(36).slice(2)}`;
+      bundle.objects.push({
+        type: 'attack-pattern',
+        id: attackId,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        name: ttp.name,
+        external_references: ttp.id ? [{
+          source_name: 'mitre-attack',
+          external_id: ttp.id,
+        }] : [],
+      });
+      bundle.objects.push({
+        type: 'relationship',
+        id: `relationship--${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        relationship_type: 'uses',
+        source_ref: actorId,
+        target_ref: attackId,
+      });
+    });
+
+    const json = JSON.stringify(bundle, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stix-${selectedActor.name?.replace(/\s+/g, '-').toLowerCase() || 'actor'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('STIX 2.1 bundle exported');
+  };
 
   const sortedIndicators = useMemo(() => {
     return [...indicators].sort((a: any, b: any) => {
@@ -315,17 +538,16 @@ export default function ActorDetail() {
   ];
 
   if (isLoading && !selectedActor) {
-    return (
-      <div className="card text-center py-16">
-        <div className="animate-pulse text-text-muted">Loading...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   return (
     <div>
       <PageHeader title={selectedActor?.name || 'Actor Detail'} subtitle="View actor details and associated indicators">
         <div className="flex items-center gap-2">
+          <button onClick={handleExportSTIX} className="btn-secondary flex items-center gap-2 text-sm">
+            <Download size={16} /> Export STIX
+          </button>
           <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
             <Download size={16} /> Export
           </button>
@@ -341,11 +563,48 @@ export default function ActorDetail() {
           <div className="flex justify-center mb-4">
             <RiskScoreCard score={riskScore} />
           </div>
+          <div className="flex justify-center mb-4">
+            <button
+              onClick={handleRecalculateRisk}
+              disabled={recalculating}
+              className="btn-secondary text-xs flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} className={recalculating ? 'animate-spin' : ''} />
+              {recalculating ? 'Calculating...' : 'Recalculate Risk'}
+            </button>
+          </div>
           <div className={`border rounded-lg p-3 mb-4 ${threatBorderColor} bg-bg-tertiary/30`}>
             <div className="flex items-center justify-center">
               <span className={`text-sm font-bold uppercase ${threatLevelColor}`}>{threatLevel} THREAT</span>
             </div>
           </div>
+
+          {/* Risk Score Breakdown */}
+          {riskBreakdown && (
+            <div className="mb-4 p-3 bg-bg-tertiary rounded-lg border border-border">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Score Breakdown</h4>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Sophistication Level</span>
+                  <span className="text-text-primary">{riskBreakdown.sophistication_level} ({riskBreakdown.sophistication_weight})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Indicator Count</span>
+                  <span className="text-text-primary">{riskBreakdown.indicator_count}</span>
+                </div>
+                {riskBreakdown.avg_indicator_confidence && (
+                  <div className="flex justify-between">
+                    <span className="text-text-muted">Avg Indicator Confidence</span>
+                    <span className="text-text-primary">{riskBreakdown.avg_indicator_confidence}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-border mt-1.5 pt-1.5">
+                  <span className="text-text-muted font-medium">Formula</span>
+                  <span className="text-accent font-mono">{riskBreakdown.formula}</span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-xs text-text-muted">Status</span>
@@ -406,16 +665,69 @@ export default function ActorDetail() {
         <div className="lg:col-span-2 space-y-6">
           <div className="card">
             <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Activity size={14} /> Tactics, Techniques & Procedures
+              <Activity size={14} /> TTP Matrix (MITRE ATT&CK)
             </h3>
-            {ttps.length > 0 ? (
-              <div className="flex flex-wrap">
-                {ttps.map((ttp: string, idx: number) => (
-                  <TtpBadge key={idx} label={ttp} />
-                ))}
+            <div className="relative mb-4">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input
+                    type="text"
+                    value={ttpSearch}
+                    onChange={(e) => { setTtpSearch(e.target.value); setTtpSearchOpen(true); }}
+                    onFocus={() => setTtpSearchOpen(true)}
+                    placeholder="Search ATT&CK techniques..."
+                    className="input pl-9 text-sm"
+                  />
+                  {ttpSearchOpen && ttpSearch && (
+                    <div className="absolute left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto bg-bg-card border border-border rounded-lg shadow-xl z-50">
+                      {filteredTtps.filter((t) => !actorTtps.find((a: any) => a.id === t.id)).length === 0 ? (
+                        <div className="p-3 text-sm text-text-muted text-center">No matching techniques found (or already added)</div>
+                      ) : (
+                        filteredTtps
+                          .filter((t) => !actorTtps.find((a: any) => a.id === t.id))
+                          .map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => handleAddTtp(t)}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg-hover transition-colors flex items-center justify-between"
+                            >
+                              <div>
+                                <span className="text-text-primary">{t.name}</span>
+                                <span className="text-xs text-text-muted ml-2">{t.id}</span>
+                              </div>
+                              <span className={`text-xs px-2 py-0.5 rounded border ${TACTIC_BG[TACTIC_COLORS[t.category]] || 'bg-gray-500/15 border-gray-500/30 text-gray-400'}`}>
+                                {t.tactic}
+                              </span>
+                            </button>
+                          ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {ttpSearchOpen && ttpSearch && (
+                <div className="fixed inset-0 z-40" onClick={() => setTtpSearchOpen(false)} />
+              )}
+            </div>
+            {actorTtps.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {actorTtps.map((ttp: any, idx: number) => {
+                  const color = TACTIC_COLORS[ttp.category] || 'gray';
+                  const bgClass = TACTIC_BG[color] || 'bg-gray-500/15 border-gray-500/30 text-gray-400';
+                  return (
+                    <span key={idx} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border ${bgClass}`}>
+                      <span className="opacity-70">{ttp.id}</span>
+                      <span>{ttp.name}</span>
+                      <button onClick={() => handleRemoveTtp(ttp.id)} className="ml-0.5 hover:text-white transition-colors">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-sm text-text-muted">No TTP data recorded for this actor.</p>
+              <p className="text-sm text-text-muted">No TTPs mapped. Search above to add techniques from MITRE ATT&CK.</p>
             )}
           </div>
 

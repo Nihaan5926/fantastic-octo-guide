@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { reportsApi } from './api';
+import { useSettingsStore } from '../../store/settingsStore';
 
 interface ReportStore {
   items: any[];
@@ -28,7 +29,8 @@ export const useReportStore = create<ReportStore>((set, get) => ({
   fetchList: async (params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const { data } = await reportsApi.list(params);
+      const limit = params.limit || useSettingsStore.getState().itemsPerPage;
+      const { data } = await reportsApi.list({ limit, ...params });
       set({
         items: data.data || data.items || [],
         pagination: {

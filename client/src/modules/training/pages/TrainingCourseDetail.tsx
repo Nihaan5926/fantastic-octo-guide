@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { trainingApi } from '../api';
 import { StatusBadge } from '../../../components/common/Badges';
 import DataTable from '../../../components/common/DataTable';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const enrollmentStatusColorMap: Record<string, string> = {
   ENROLLED: 'blue', IN_PROGRESS: 'yellow', COMPLETED: 'green', FAILED: 'red', DROPPED: 'gray',
@@ -30,7 +31,7 @@ export default function TrainingCourseDetail() {
   }, [id]);
 
   if (loading) {
-    return <div className="card text-center py-16"><div className="animate-pulse text-text-muted">Loading...</div></div>;
+    return <DetailSkeleton />;
   }
   if (!course) {
     return (

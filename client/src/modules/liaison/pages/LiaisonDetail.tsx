@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { liaisonApi } from '../api';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
 import DataTable from '../../../components/common/DataTable';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const statusColorMap: Record<string, string> = {
   ACTIVE: 'green', INACTIVE: 'gray', SUSPENDED: 'yellow', TERMINATED: 'red',
@@ -34,7 +35,7 @@ export default function LiaisonDetail() {
   }, [id]);
 
   if (loading) {
-    return <div className="card text-center py-16"><div className="animate-pulse text-text-muted">Loading...</div></div>;
+    return <DetailSkeleton />;
   }
   if (!partner) {
     return (

@@ -10,7 +10,7 @@ interface Pagination {
 }
 
 interface FintState {
-  activeTab: 'transactions' | 'entities';
+  activeTab: 'transactions' | 'entities' | 'network';
 
   transactions: any[];
   transactionsPagination: Pagination;

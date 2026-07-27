@@ -15,4 +15,5 @@ export const evidenceApi = {
   download: (id: string) =>
     api.get(`/evidence/${id}/download`, { responseType: 'blob' }),
   delete: (id: string) => api.delete(`/evidence/${id}`),
+  verify: (id: string) => api.get(`/evidence/${id}/verify`),
 };

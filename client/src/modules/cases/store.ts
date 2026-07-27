@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { casesApi } from './api';
+import { useSettingsStore } from '../../store/settingsStore';
 
 interface CaseStore {
   items: any[];
@@ -28,7 +29,8 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
   fetchList: async (params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const { data } = await casesApi.list(params);
+      const limit = params.limit || useSettingsStore.getState().itemsPerPage;
+      const { data } = await casesApi.list({ limit, ...params });
       set({
         items: data.data || data.items || [],
         pagination: {

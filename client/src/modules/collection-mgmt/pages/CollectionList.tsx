@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Edit, Trash2, Radio, Globe, MapPin, Download, ChevronDown } from 'lucide-react';
+import { Edit, Trash2, Radio, Globe, MapPin, Download, ChevronDown, Star, AlertTriangle } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
-import { collectionRequirementsApi, collectionAssetsApi } from '../api';
+import { collectionRequirementsApi, collectionAssetsApi, collectionPirsApi, collectionGapsApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
@@ -56,7 +56,7 @@ const assetStatusOptions = [
 const emptyRequirement = { reference_number: '', title: '', description: '', priority: 'MEDIUM', intelligence_discipline: 'OSINT', status: 'ACTIVE', requester_id: '' };
 const emptyAsset = { name: '', asset_type: 'SATELLITE', platform: '', capability: '', status: 'ACTIVE', location: '' };
 
-type TabKey = 'requirements' | 'assets';
+type TabKey = 'requirements' | 'assets' | 'pirs';
 
 export default function CollectionList() {
   const {
@@ -83,6 +83,16 @@ export default function CollectionList() {
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
+  // PIR state
+  const [pirs, setPirs] = useState<any[]>([]);
+  const [pirsLoading, setPirsLoading] = useState(false);
+  const [pirModal, setPirModal] = useState(false);
+  const [pirForm, setPirForm] = useState({ title: '', priority: 'MEDIUM', description: '', requirement_id: '' });
+  const [promoteReq, setPromoteReq] = useState<any>(null);
+  const [gaps, setGaps] = useState<any[]>([]);
+  const [gapsLoading, setGapsLoading] = useState(false);
+  const [gapsVisible, setGapsVisible] = useState(false);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
@@ -95,8 +105,28 @@ export default function CollectionList() {
 
   useEffect(() => {
     if (activeTab === 'requirements') fetchRequirements({ search, page, limit: 10 });
-    else fetchAssets({ search, page, limit: 10 });
+    else if (activeTab === 'assets') fetchAssets({ search, page, limit: 10 });
+    else if (activeTab === 'pirs') fetchPirs();
   }, [activeTab, search, page]);
+
+  const fetchPirs = async () => {
+    setPirsLoading(true);
+    try {
+      const data = await collectionPirsApi.list({ page, limit: 50 });
+      setPirs(data.data || []);
+    } catch { /* ignore */ }
+    finally { setPirsLoading(false); }
+  };
+
+  const fetchGaps = async () => {
+    setGapsLoading(true);
+    try {
+      const data = await collectionGapsApi.list();
+      setGaps(data.data || []);
+      setGapsVisible(true);
+    } catch { /* ignore */ }
+    finally { setGapsLoading(false); }
+  };
 
   const handleReqSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,6 +242,40 @@ export default function CollectionList() {
     setAssetModal(true);
   };
 
+  const handlePromoteToPir = (req: any) => {
+    setPromoteReq(req);
+    setPirForm({ title: req.title || '', priority: req.priority || 'MEDIUM', description: req.description || '', requirement_id: req.id });
+    setPirModal(true);
+  };
+
+  const handlePirSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pirForm.title.trim() || !pirForm.requirement_id) {
+      toast.error('Title and linked requirement are required');
+      return;
+    }
+    setSaving(true);
+    try {
+      await collectionPirsApi.create(pirForm);
+      toast.success('PIR created');
+      setPirModal(false);
+      fetchPirs();
+    } catch {
+      toast.error('Failed to create PIR');
+    } finally { setSaving(false); }
+  };
+
+  const handlePirDelete = async (pirId: string) => {
+    setSaving(true);
+    try {
+      await collectionPirsApi.delete(pirId);
+      toast.success('PIR deleted');
+      fetchPirs();
+    } catch {
+      toast.error('Failed to delete PIR');
+    } finally { setSaving(false); }
+  };
+
   const reqColumns = [
     { key: 'reference_number', label: 'Ref #', className: 'font-mono text-xs' },
     { key: 'title', label: 'Title', className: 'font-medium' },
@@ -241,6 +305,9 @@ export default function CollectionList() {
       key: 'actions', label: '', className: 'w-20',
       render: (item: any) => (
         <div className="flex items-center gap-1">
+          <button onClick={(e) => { e.stopPropagation(); handlePromoteToPir(item); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-amber-400" title="Promote to PIR">
+            <Star size={15} />
+          </button>
           <button onClick={(e) => { e.stopPropagation(); openReqModal(item); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-accent"><Edit size={15} /></button>
           <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: 'requirement', item }); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-red-400"><Trash2 size={15} /></button>
         </div>
@@ -329,6 +396,7 @@ export default function CollectionList() {
         {([
           { key: 'requirements' as TabKey, label: `Requirements (${requirements.length})`, icon: <Radio size={15} /> },
           { key: 'assets' as TabKey, label: `Assets (${assets.length})`, icon: <Globe size={15} /> },
+          { key: 'pirs' as TabKey, label: `PIRs (${pirs.length})`, icon: <Star size={15} /> },
         ]).map((tab) => (
           <button
             key={tab.key}
@@ -342,10 +410,10 @@ export default function CollectionList() {
           </button>
         ))}
         <button
-          onClick={() => activeTab === 'requirements' ? openReqModal() : openAssetModal()}
+          onClick={() => activeTab === 'requirements' ? openReqModal() : activeTab === 'assets' ? openAssetModal() : null}
           className="ml-auto btn-primary text-sm mb-1"
         >
-          {activeTab === 'requirements' ? 'New Requirement' : 'New Asset'}
+          {activeTab === 'requirements' ? 'New Requirement' : activeTab === 'assets' ? 'New Asset' : ''}
         </button>
       </div>
 
@@ -369,6 +437,97 @@ export default function CollectionList() {
           emptyMessage="No collection assets found"
           onPageChange={setPage}
         />
+      )}
+
+      {/* PIRs Tab */}
+      {activeTab === 'pirs' && (
+        <div className="space-y-6">
+          {/* Coverage Gaps Alert */}
+          <div className="card border-amber-500/30 bg-amber-500/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-amber-400" />
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-300">Coverage Gaps</h3>
+                  <p className="text-xs text-text-muted">
+                    Requirements without paired collection assets
+                    {gaps.length > 0 && <span className="text-amber-400 ml-1">({gaps.length} gaps found)</span>}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={gapsVisible ? () => setGapsVisible(false) : fetchGaps}
+                disabled={gapsLoading}
+                className="btn-secondary text-xs"
+              >
+                {gapsLoading ? 'Checking...' : gapsVisible ? 'Hide Gaps' : 'Check Gaps'}
+              </button>
+            </div>
+            {gapsVisible && (
+              <div className="mt-3">
+                {gaps.length === 0 ? (
+                  <p className="text-xs text-emerald-400">All requirements have coverage.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {gaps.map((gap: any) => (
+                      <div key={gap.id} className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary rounded border border-border text-xs">
+                        <div>
+                          <span className="font-mono text-text-muted mr-2">{gap.reference_number}</span>
+                          <span className="text-text-primary">{gap.title}</span>
+                        </div>
+                        <StatusBadge label={gap.intelligence_discipline || 'N/A'} color="red" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Star size={16} className="text-amber-400" />
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">Priority Intelligence Requirements</h3>
+            </div>
+            {pirsLoading ? (
+              <div className="text-center py-8 text-text-muted animate-pulse">Loading PIRs...</div>
+            ) : pirs.length === 0 ? (
+              <div className="card text-center py-12 text-text-muted">
+                <Star size={32} className="mx-auto mb-3 opacity-40" />
+                <p>No PIRs defined</p>
+                <p className="text-xs mt-1">Promote a requirement to a PIR from the Requirements tab</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {pirs.map((pir: any) => (
+                  <div key={pir.id} className="card flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-xs text-text-muted">{pir.reference_number}</span>
+                        <span className="font-medium">{pir.title}</span>
+                        <PriorityBadge level={pir.priority} />
+                        <StatusBadge label={pir.status || 'ACTIVE'} color={pir.status === 'ACTIVE' ? 'green' : 'gray'} />
+                      </div>
+                      {pir.description && (
+                        <p className="text-sm text-text-secondary mb-1">{pir.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 text-xs text-text-muted">
+                        <span>Linked to: {pir.requirement_ref || pir.requirement_title || pir.requirement_id}</span>
+                        {pir.requester_first && <span>by {pir.requester_first} {pir.requester_last}</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handlePirDelete(pir.id)}
+                      className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-red-400"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Requirement Modal */}
@@ -420,6 +579,28 @@ export default function CollectionList() {
         message={`Are you sure you want to delete "${deleteTarget?.item?.title || deleteTarget?.item?.name}"?`}
         variant="danger"
       />
+
+      {/* PIR Modal */}
+      <Modal isOpen={pirModal} onClose={() => setPirModal(false)} title="Create Priority Intelligence Requirement" size="lg">
+        <form onSubmit={handlePirSave} className="space-y-4">
+          {promoteReq && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <p className="text-xs text-amber-400 font-medium uppercase tracking-wider mb-1">Promoting From Requirement</p>
+              <p className="text-sm text-amber-200">{promoteReq.reference_number}: {promoteReq.title}</p>
+            </div>
+          )}
+          <FormInput label="Title" value={pirForm.title} onChange={(e) => setPirForm({ ...pirForm, title: e.target.value })} required />
+          <div className="grid grid-cols-2 gap-4">
+            <FormSelect label="Priority" options={priorityOptions} value={pirForm.priority} onChange={(e) => setPirForm({ ...pirForm, priority: e.target.value })} required />
+            <FormInput label="Linked Requirement ID" value={pirForm.requirement_id} onChange={(e) => setPirForm({ ...pirForm, requirement_id: e.target.value })} required />
+          </div>
+          <FormTextarea label="Description" value={pirForm.description} onChange={(e) => setPirForm({ ...pirForm, description: e.target.value })} />
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <button type="button" onClick={() => setPirModal(false)} className="btn-secondary" disabled={saving}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Creating...' : 'Create PIR'}</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

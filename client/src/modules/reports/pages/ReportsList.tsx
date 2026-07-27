@@ -8,10 +8,11 @@ import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
-import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
+import { FormInput, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge, ClassificationBadge, PriorityBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Pencil, Trash2, Download, ChevronDown, Trash, Printer, Share2, Bold, Italic, List } from 'lucide-react';
+import { Pencil, Trash2, Download, ChevronDown, Trash, Printer, Share2 } from 'lucide-react';
+import RichTextEditor from '../../../components/common/RichTextEditor';
 
 const statusOptions = [
   { value: 'DRAFT', label: 'Draft' },
@@ -234,35 +235,6 @@ export default function ReportsList() {
     });
   };
 
-  const insertMarkdown = (token: string, suffix?: string) => {
-    const el = document.querySelector('#report-summary-textarea') as HTMLTextAreaElement;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const selected = el.value.substring(start, end);
-    const replacement = token + selected + (suffix || token);
-    const newValue = el.value.substring(0, start) + replacement + el.value.substring(end);
-    setForm({ ...form, summary: newValue });
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + token.length, start + token.length + selected.length);
-    }, 0);
-  };
-
-  const richToolbar = (
-    <div className="flex items-center gap-1 mb-1">
-      <button type="button" onClick={(e) => { e.preventDefault(); insertMarkdown('**'); }} className="p-1.5 rounded hover:bg-bg-hover text-text-secondary hover:text-text-primary" title="Bold">
-        <Bold size={14} />
-      </button>
-      <button type="button" onClick={(e) => { e.preventDefault(); insertMarkdown('*'); }} className="p-1.5 rounded hover:bg-bg-hover text-text-secondary hover:text-text-primary" title="Italic">
-        <Italic size={14} />
-      </button>
-      <button type="button" onClick={(e) => { e.preventDefault(); insertMarkdown('\n- '); }} className="p-1.5 rounded hover:bg-bg-hover text-text-secondary hover:text-text-primary" title="Bullet List">
-        <List size={14} />
-      </button>
-    </div>
-  );
-
   const handleBulkStatusChange = async () => {
     if (!bulkStatusValue) return;
     setBulkStatusOpen(false);
@@ -421,8 +393,12 @@ export default function ReportsList() {
           </div>
           <FormInput label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
           <div>
-            <FormTextarea id="report-summary-textarea" label="Summary" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} rows={3} />
-            {richToolbar}
+            <label className="block text-sm font-medium text-text-secondary mb-1">Summary</label>
+            <RichTextEditor
+              content={form.summary}
+              onChange={(html) => setForm({ ...form, summary: html })}
+              placeholder="Write a summary..."
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormSelect label="Classification" options={classificationOptions} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} required />

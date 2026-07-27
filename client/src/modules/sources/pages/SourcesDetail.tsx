@@ -5,6 +5,7 @@ import { useSourceStore } from '../store';
 import { sourcesApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatusBadge, SourceTypeBadge } from '../../../components/common/Badges';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import Modal from '../../../components/common/Modal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -155,11 +156,7 @@ export default function SourcesDetail() {
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleString() : '—';
 
   if (isLoading && !selected) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-pulse text-text-muted">Loading source...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!selected) {

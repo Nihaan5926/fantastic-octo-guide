@@ -11,7 +11,7 @@ import SearchBar from '../../../components/common/SearchBar';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge, ClassificationBadge, PriorityBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Pencil, Trash2, Download, ChevronDown, Trash } from 'lucide-react';
+import { Pencil, Trash2, Download, ChevronDown, Trash, LayoutGrid } from 'lucide-react';
 
 const statusOptions = [
   { value: 'OPEN', label: 'Open' },
@@ -254,6 +254,9 @@ export default function CasesList() {
   return (
     <div>
       <PageHeader title="Cases" subtitle="Manage case investigations" onCreate={openCreate} createLabel="New Case">
+        <button onClick={() => navigate('/cases/board')} className="btn-secondary text-sm flex items-center gap-1" title="Kanban Board View">
+          <LayoutGrid size={14} /> Board View
+        </button>
         <div className="relative" ref={exportRef}>
           <button
             onClick={() => setExportOpen(!exportOpen)}

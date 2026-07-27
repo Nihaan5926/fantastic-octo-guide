@@ -5,7 +5,8 @@ import { useEvidenceStore } from '../store';
 import { evidenceApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
-import { ArrowLeft, Download, Clock, User as UserIcon, File, Calendar, Shield, Tag, HardDrive, Play, Image, FileText, Video, FileArchive, Database, Hash, Upload, Ruler } from 'lucide-react';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
+import { ArrowLeft, Download, Clock, User as UserIcon, File, Calendar, Shield, Tag, HardDrive, Play, Image, FileText, Video, FileArchive, Database, Hash, Upload, Ruler, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 
 const typeColorMap: Record<string, string> = {
   DOCUMENT: 'blue', IMAGE: 'purple', VIDEO: 'red', AUDIO: 'yellow', OTHER: 'gray',
@@ -73,6 +74,8 @@ export default function EvidenceDetail() {
   const navigate = useNavigate();
   const { selected, isLoading, fetchOne } = useEvidenceStore();
   const [previewLoaded, setPreviewLoaded] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<any>(null);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -113,12 +116,25 @@ export default function EvidenceDetail() {
     window.open(`/api/evidence/${id}/preview`, '_blank');
   };
 
+  const handleVerify = async () => {
+    if (!id) return;
+    setVerifying(true);
+    setVerifyResult(null);
+    try {
+      const { data } = await evidenceApi.verify(id);
+      setVerifyResult(data);
+      if (data.valid) toast.success('File integrity verified');
+      else toast.error('File integrity check failed');
+    } catch {
+      toast.error('Verification failed');
+      setVerifyResult(null);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   if (isLoading) {
-    return (
-      <div className="card text-center py-16">
-        <div className="animate-pulse text-text-muted">Loading...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!selected) {
@@ -272,19 +288,64 @@ export default function EvidenceDetail() {
                     <span className="text-xs text-text-muted truncate">{metadata.originalName}</span>
                   </div>
                 )}
+                {metadata.hash && (
+                  <div className="flex items-center gap-2">
+                    <Hash size={13} className="text-text-muted" />
+                    <span className="text-xs text-text-muted font-mono truncate" title={metadata.hash}>SHA-256: {metadata.hash}</span>
+                  </div>
+                )}
                 {metadata.uploadedAt && (
                   <div className="flex items-center gap-2">
                     <Upload size={13} className="text-text-muted" />
                     <span className="text-xs text-text-muted">Uploaded {new Date(metadata.uploadedAt).toLocaleString()}</span>
                   </div>
                 )}
-                {Object.entries(metadata).filter(([k]) => !['originalName', 'size', 'mimeType', 'dimensions', 'uploadedAt'].includes(k)).map(([key, value]) => (
+                {Object.entries(metadata).filter(([k]) => !['originalName', 'size', 'mimeType', 'dimensions', 'uploadedAt', 'hash'].includes(k)).map(([key, value]) => (
                   <div key={key} className="flex items-center gap-2">
                     <Hash size={13} className="text-text-muted" />
                     <span className="text-xs text-text-muted">{key}: {String(value)}</span>
                   </div>
                 ))}
               </div>
+              {/* Integrity Verification */}
+              {selected.file_path && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">File Integrity</span>
+                    <button
+                      onClick={handleVerify}
+                      disabled={verifying}
+                      className="btn-secondary text-xs flex items-center gap-1.5 py-1 px-2"
+                    >
+                      <RefreshCw size={11} className={verifying ? 'animate-spin' : ''} />
+                      {verifying ? 'Checking...' : 'Verify Integrity'}
+                    </button>
+                  </div>
+                  {verifyResult && (
+                    <div className={`p-2 rounded-lg text-xs flex items-center gap-2 ${
+                      verifyResult.valid
+                        ? 'bg-emerald-500/10 border border-emerald-500/30'
+                        : 'bg-red-500/10 border border-red-500/30'
+                    }`}>
+                      {verifyResult.valid ? (
+                        <CheckCircle size={14} className="text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle size={14} className="text-red-400 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className={verifyResult.valid ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
+                          {verifyResult.valid ? 'Integrity Verified' : 'Integrity Failed'}
+                        </p>
+                        {verifyResult.storedHash && verifyResult.computedHash && (
+                          <p className="text-text-muted truncate font-mono">
+                            Stored: {verifyResult.storedHash.slice(0, 16)}...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

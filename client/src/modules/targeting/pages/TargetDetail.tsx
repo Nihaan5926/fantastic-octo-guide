@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Plus, Edit, Trash2, Target, MapPin } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, Target, MapPin, Crosshair, CheckCircle, Play, ClipboardCheck } from 'lucide-react';
 import Modal from '../../../components/common/Modal';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge, ClassificationBadge, PriorityBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { DetailSkeleton, CardSkeleton } from '../../../components/common/LoadingSkeleton';
 import { useTargetStore } from '../store';
+import { targetPackagesApi } from '../api';
 
 const statusOptions = [
   { value: 'DRAFT', label: 'Draft' },
@@ -30,6 +32,17 @@ const priorityOptions = [
   { value: 'CRITICAL', label: 'Critical' },
 ];
 
+const cdeOptions = [
+  { value: 'LOW', label: 'Low' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'HIGH', label: 'High' },
+];
+
+const LIFECYCLE_STEPS = ['DRAFT', 'NOMINATED', 'VETTED', 'APPROVED', 'EXECUTED', 'ASSESSED'];
+const lifecycleStatusColorMap: Record<string, string> = {
+  DRAFT: 'gray', NOMINATED: 'blue', VETTED: 'purple', APPROVED: 'yellow', EXECUTED: 'green', ASSESSED: 'emerald',
+};
+
 export default function TargetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -51,6 +64,14 @@ export default function TargetDetail() {
 
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
+  const [cdeValue, setCdeValue] = useState<string>('');
+  const [cdeEditing, setCdeEditing] = useState(false);
+  const [bdaText, setBdaText] = useState('');
+  const [bdaEditing, setBdaEditing] = useState(false);
+  const [cdeSaving, setCdeSaving] = useState(false);
+  const [bdaSaving, setBdaSaving] = useState(false);
+  const [lifecycle, setLifecycle] = useState(LIFECYCLE_STEPS);
 
   useEffect(() => {
     if (id) {
@@ -70,10 +91,58 @@ export default function TargetDetail() {
         objective: selectedPackage.objective || '',
         target_name: selectedPackage.target_name || '',
         location: selectedPackage.location || '',
-        cde_estimate: selectedPackage.cde_estimate != null ? String(selectedPackage.cde_estimate) : '',
+        cde_estimate: selectedPackage.cde_estimate || '',
       });
+      setCdeValue(selectedPackage.cde_estimate || '');
+      const assessment = selectedPackage.assessment || {};
+      setBdaText((assessment as any).bda_results || '');
     }
   }, [selectedPackage]);
+
+  const handleLifecycleAction = async (action: string, data?: string) => {
+    if (!id) return;
+    setLifecycleLoading(true);
+    try {
+      switch (action) {
+        case 'nominate': await targetPackagesApi.nominate(id); break;
+        case 'vet': await targetPackagesApi.vet(id, data); break;
+        case 'approve': await targetPackagesApi.approve(id); break;
+        case 'execute': await targetPackagesApi.execute(id); break;
+        case 'assess': await targetPackagesApi.assess(id, data || ''); break;
+      }
+      toast.success(`Package ${action === 'assess' ? 'assessed' : action + 'd'}`);
+      await fetchPackage(id);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || `Failed to ${action}`);
+    } finally {
+      setLifecycleLoading(false);
+    }
+  };
+
+  const handleCdeSave = async () => {
+    if (!id) return;
+    setCdeSaving(true);
+    try {
+      await updatePackage(id, { cde_estimate: cdeValue });
+      toast.success('CDE estimate updated');
+      setCdeEditing(false);
+      await fetchPackage(id);
+    } catch {
+      toast.error('Failed to update CDE');
+    } finally { setCdeSaving(false); }
+  };
+
+  const handleBdaSave = async () => {
+    if (!id) return;
+    setBdaSaving(true);
+    try {
+      await handleLifecycleAction('assess', bdaText);
+      setBdaEditing(false);
+      setBdaSaving(false);
+    } catch {
+      setBdaSaving(false);
+    }
+  };
 
   const handleSavePackage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,11 +214,7 @@ export default function TargetDetail() {
   };
 
   if (!selectedPackage && isLoading) {
-    return (
-      <div className="card text-center py-16">
-        <div className="animate-pulse text-text-muted">Loading target package...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!selectedPackage) {
@@ -194,27 +259,167 @@ export default function TargetDetail() {
       </div>
 
       {activeTab === 'info' && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Target Package Details</h2>
-            <button onClick={() => setEditPackageOpen(true)} className="btn-secondary text-sm">
-              <Edit size={14} /> Edit Package
-            </button>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Target Name', value: selectedPackage.target_name },
-              { label: 'Location', value: selectedPackage.location },
-              { label: 'CDE Estimate', value: selectedPackage.cde_estimate != null ? String(selectedPackage.cde_estimate) : '—' },
-              { label: 'Objective', value: selectedPackage.objective, span: 3 },
-            ].map((item, i) => (
-              <div key={i} className={item.span && item.span > 1 ? 'col-span-3' : ''}>
-                <label className="block text-xs text-text-muted mb-1">{item.label}</label>
-                <p className="text-sm">{item.value || '—'}</p>
+        <div className="space-y-6">
+          {/* Lifecycle Stepper */}
+          <div className="card">
+            <h2 className="text-lg font-semibold mb-4">Targeting Lifecycle</h2>
+            <div className="flex items-center">
+              {LIFECYCLE_STEPS.map((step, idx) => {
+                const currentStepIdx = LIFECYCLE_STEPS.indexOf(selectedPackage?.status || 'DRAFT');
+                const isCompleted = currentStepIdx > idx;
+                const isCurrent = currentStepIdx === idx;
+                return (
+                  <React.Fragment key={step}>
+                    <div className="flex flex-col items-center flex-1">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                          isCompleted
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : isCurrent
+                            ? 'bg-accent border-accent text-white'
+                            : 'bg-bg-tertiary border-border text-text-muted'
+                        }`}
+                      >
+                        {isCompleted ? '\u2713' : idx + 1}
+                      </div>
+                      <span className={`text-[10px] mt-1 text-center leading-tight ${isCurrent ? 'text-text-primary font-semibold' : 'text-text-muted'}`}>
+                        {step}
+                      </span>
+                    </div>
+                    {idx < LIFECYCLE_STEPS.length - 1 && (
+                      <div className={`h-0.5 flex-1 -mt-4 ${isCompleted ? 'bg-emerald-500' : 'bg-border'}`} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* Action Buttons */}
+            {selectedPackage?.status !== 'ASSESSED' && (
+              <div className="mt-4 flex justify-end gap-2 flex-wrap">
+                {selectedPackage?.status === 'DRAFT' && (
+                  <button onClick={() => handleLifecycleAction('nominate')} disabled={lifecycleLoading} className="btn-primary text-sm">
+                    <Crosshair size={14} className="mr-1" /> Nominate
+                  </button>
+                )}
+                {selectedPackage?.status === 'NOMINATED' && (
+                  <button onClick={() => handleLifecycleAction('vet')} disabled={lifecycleLoading} className="btn-primary text-sm">
+                    <CheckCircle size={14} className="mr-1" /> Vet
+                  </button>
+                )}
+                {selectedPackage?.status === 'VETTED' && (
+                  <button onClick={() => handleLifecycleAction('approve')} disabled={lifecycleLoading} className="btn-primary text-sm bg-emerald-600 hover:bg-emerald-700">
+                    <CheckCircle size={14} className="mr-1" /> Approve
+                  </button>
+                )}
+                {selectedPackage?.status === 'APPROVED' && (
+                  <button onClick={() => handleLifecycleAction('execute')} disabled={lifecycleLoading} className="btn-primary text-sm bg-red-600 hover:bg-red-700">
+                    <Play size={14} className="mr-1" /> Execute
+                  </button>
+                )}
               </div>
-            ))}
+            )}
           </div>
-          {selectedPackage.assessment && (
+
+          {/* Package Details */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Target Package Details</h2>
+              <button onClick={() => setEditPackageOpen(true)} className="btn-secondary text-sm">
+                <Edit size={14} /> Edit Package
+              </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {[
+                { label: 'Target Name', value: selectedPackage.target_name },
+                { label: 'Location', value: selectedPackage.location },
+                { label: 'CDE Estimate', value: selectedPackage.cde_estimate || '—' },
+                { label: 'Objective', value: selectedPackage.objective, span: 3 },
+              ].map((item, i) => (
+                <div key={i} className={item.span && item.span > 1 ? 'col-span-3' : ''}>
+                  <label className="block text-xs text-text-muted mb-1">{item.label}</label>
+                  <p className="text-sm">{item.value || '—'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CDE Estimate */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">Collateral Damage Estimate (CDE)</h3>
+              {!cdeEditing ? (
+                <button onClick={() => setCdeEditing(true)} className="btn-secondary text-xs">
+                  <Edit size={12} /> Edit
+                </button>
+              ) : null}
+            </div>
+            {cdeEditing ? (
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <FormSelect
+                    label="CDE Level"
+                    options={cdeOptions}
+                    value={cdeValue}
+                    onChange={(e) => setCdeValue(e.target.value)}
+                  />
+                </div>
+                <button onClick={handleCdeSave} disabled={cdeSaving} className="btn-primary">
+                  {cdeSaving ? 'Saving...' : 'Save'}
+                </button>
+                <button onClick={() => { setCdeEditing(false); setCdeValue(selectedPackage?.cde_estimate || ''); }} className="btn-secondary">Cancel</button>
+              </div>
+            ) : (
+              <StatusBadge
+                label={selectedPackage?.cde_estimate || 'Not Set'}
+                color={selectedPackage?.cde_estimate === 'HIGH' ? 'red' : selectedPackage?.cde_estimate === 'MEDIUM' ? 'yellow' : selectedPackage?.cde_estimate === 'LOW' ? 'green' : 'gray'}
+              />
+            )}
+          </div>
+
+          {/* BDA Section */}
+          {selectedPackage?.status === 'EXECUTED' || selectedPackage?.status === 'ASSESSED' ? (
+            <div className="card border-amber-500/30">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">Battle Damage Assessment (BDA)</h3>
+                {!bdaEditing && selectedPackage?.status === 'EXECUTED' ? (
+                  <button onClick={() => setBdaEditing(true)} className="btn-primary text-xs">
+                    <ClipboardCheck size={12} /> Enter BDA
+                  </button>
+                ) : null}
+              </div>
+              {bdaEditing ? (
+                <div>
+                  <FormTextarea
+                    label="BDA Results"
+                    value={bdaText}
+                    onChange={(e) => setBdaText(e.target.value)}
+                    placeholder="Describe the battle damage assessment results..."
+                    rows={4}
+                  />
+                  <div className="flex justify-end gap-2 mt-3">
+                    <button onClick={() => { setBdaEditing(false); setBdaText(''); }} className="btn-secondary">Cancel</button>
+                    <button onClick={handleBdaSave} disabled={bdaSaving || !bdaText.trim()} className="btn-primary">
+                      {bdaSaving ? 'Saving...' : 'Assess'}
+                    </button>
+                  </div>
+                </div>
+              ) : bdaText ? (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <p className="text-sm text-amber-200 whitespace-pre-wrap">{bdaText}</p>
+                  {selectedPackage?.status === 'ASSESSED' && (
+                    <p className="text-xs text-amber-400 mt-2">
+                      Assessed at: {(selectedPackage.assessment as any)?.assessed_at ? new Date((selectedPackage.assessment as any).assessed_at).toLocaleString() : 'Unknown'}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-text-muted">No BDA recorded yet. Click "Enter BDA" to provide assessment results.</p>
+              )}
+            </div>
+          ) : null}
+
+          {selectedPackage.assessment && typeof selectedPackage.assessment === 'object' && Object.keys(selectedPackage.assessment).length > 0 && !(selectedPackage.assessment as any).bda_results && (
             <div className="mt-4 p-4 rounded-lg bg-bg-tertiary/50 border border-border">
               <label className="block text-xs text-text-muted mb-1">Assessment</label>
               <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono">{JSON.stringify(selectedPackage.assessment, null, 2)}</pre>
@@ -232,7 +437,7 @@ export default function TargetDetail() {
             </button>
           </div>
           {isLoading ? (
-            <div className="card text-center py-8 text-text-muted animate-pulse">Loading nominations...</div>
+            <CardSkeleton />
           ) : nominations.length === 0 ? (
             <div className="card text-center py-12 text-text-muted">
               <Target size={32} className="mx-auto mb-3 opacity-40" />

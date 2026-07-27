@@ -18,4 +18,5 @@ export const threatsApi = {
     }),
   deleteAttachment: (id: string, attachmentId: string) =>
     api.delete(`/threats/actors/${id}/attachments/${attachmentId}`),
+  calculateRisk: (id: string) => api.post(`/threats/actors/${id}/calculate-risk`),
 };

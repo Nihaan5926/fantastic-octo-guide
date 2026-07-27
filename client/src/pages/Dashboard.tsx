@@ -376,6 +376,15 @@ export default function DashboardPage() {
                   outerRadius={100}
                   paddingAngle={4}
                   dataKey="value"
+                  onClick={(data: any) => {
+                    const clsMap: Record<string, string> = {
+                      Unclassified: 'UNCLASSIFIED', Confidential: 'CONFIDENTIAL',
+                      Secret: 'SECRET', 'Top Secret': 'TOP_SECRET',
+                    };
+                    const cls = clsMap[data.name] || data.name;
+                    navigate(`/reports?classification=${encodeURIComponent(cls)}`);
+                  }}
+                  style={{ cursor: 'pointer' }}
                 >
                   {classificationData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
@@ -404,7 +413,16 @@ export default function DashboardPage() {
                 <XAxis dataKey="status" tick={axisTickStyle} axisLine={{ stroke: '#334155' }} tickLine={false} />
                 <YAxis tick={axisTickStyle} axisLine={{ stroke: '#334155' }} tickLine={false} />
                 <Tooltip {...chartTooltipStyle} />
-                <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={60} />
+                <Bar
+                  dataKey="count"
+                  fill="#3b82f6"
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={60}
+                  onClick={(data: any) => {
+                    navigate(`/cases?status=${encodeURIComponent(data.status)}`);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -430,7 +448,10 @@ export default function DashboardPage() {
                 stroke="#8b5cf6"
                 strokeWidth={2}
                 dot={{ fill: '#8b5cf6', r: 4, strokeWidth: 0 }}
-                activeDot={{ fill: '#8b5cf6', r: 6, strokeWidth: 0 }}
+                activeDot={{ fill: '#8b5cf6', r: 6, strokeWidth: 0, onClick: (_, payload: any) => {
+                  const month = payload?.payload?.month;
+                  if (month) navigate(`/threats/indicators?month=${encodeURIComponent(month)}`);
+                } }}
               />
             </LineChart>
           </ResponsiveContainer>

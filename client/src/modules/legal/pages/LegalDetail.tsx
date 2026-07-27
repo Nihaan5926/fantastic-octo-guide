@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft } from 'lucide-react';
 import { legalApi } from '../api';
 import { StatusBadge, PriorityBadge } from '../../../components/common/Badges';
+import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const statusColorMap: Record<string, string> = {
   PENDING: 'yellow', IN_REVIEW: 'blue', APPROVED: 'green', REJECTED: 'red', CLOSED: 'gray',
@@ -26,7 +27,7 @@ export default function LegalDetail() {
   }, [id]);
 
   if (loading) {
-    return <div className="card text-center py-16"><div className="animate-pulse text-text-muted">Loading...</div></div>;
+    return <DetailSkeleton />;
   }
   if (!review) {
     return (

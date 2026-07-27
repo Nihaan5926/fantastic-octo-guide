@@ -7,7 +7,9 @@ import { v4 as uuid } from 'uuid';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { config } from '../../config';
+import { logger } from '../../utils/logger';
 
 const storage = multer.diskStorage({
   destination: config.upload.dir,
@@ -74,6 +76,16 @@ function buildMetadata(file: Express.Multer.File): Record<string, any> {
     mimeType: file.mimetype,
     uploadedAt: new Date().toISOString(),
   };
+
+  // Compute SHA-256 hash
+  try {
+    const hash = crypto.createHash('sha256');
+    const fileBuffer = fs.readFileSync(file.path);
+    hash.update(fileBuffer);
+    meta.hash = hash.digest('hex');
+  } catch (e) {
+    logger.warn('Failed to compute SHA-256 hash', { file: file.originalname, error: e });
+  }
 
   if (file.mimetype.startsWith('image/')) {
     const dims = extractImageDimensions(file.path);
@@ -240,6 +252,39 @@ router.delete('/:id', auditLog('evidence:delete', 'evidence'), async (req: Reque
       userId: req.user!.userId,
     });
     res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+// ── Integrity Verification ──
+
+router.get('/:id/verify', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('evidence').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+
+    let storedHash: string | null = null;
+    const metadata = typeof item.metadata === 'string' ? JSON.parse(item.metadata || '{}') : (item.metadata || {});
+
+    if (!item.file_path) {
+      res.json({ valid: false, storedHash: null, computedHash: null, message: 'No file associated with this evidence' });
+      return;
+    }
+
+    const filePath = path.join(config.upload.dir, item.file_path);
+    if (!fs.existsSync(filePath)) {
+      res.json({ valid: false, storedHash: metadata.hash || null, computedHash: null, message: 'File not found on disk' });
+      return;
+    }
+
+    const fileBuffer = fs.readFileSync(filePath);
+    const hash = crypto.createHash('sha256');
+    hash.update(fileBuffer);
+    const computedHash = hash.digest('hex');
+    storedHash = metadata.hash || null;
+
+    const valid = storedHash !== null && storedHash === computedHash;
+
+    res.json({ valid, storedHash, computedHash });
   } catch (e) { next(e); }
 });
 

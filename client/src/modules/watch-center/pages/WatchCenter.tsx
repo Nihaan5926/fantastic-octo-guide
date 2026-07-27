@@ -10,6 +10,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
 import { useWatchCenterStore, ShiftSchedule, WatchLog, SITREP } from '../store';
+import { socket } from '../../../core/socket';
 
 type Tab = 'shifts' | 'logs' | 'sitreps';
 
@@ -103,6 +104,23 @@ export default function WatchCenter() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const [liveAlerts, setLiveAlerts] = useState<any[]>([]);
+  const [showNewAlert, setShowNewAlert] = useState(false);
+
+  useEffect(() => {
+    socket.connect();
+    socket.emit('watch:join');
+    socket.on('alert:new', (alert: any) => {
+      setLiveAlerts((prev) => [alert, ...prev].slice(0, 20));
+      setShowNewAlert(true);
+      setTimeout(() => setShowNewAlert(false), 4000);
+    });
+
+    return () => {
+      socket.off('alert:new');
+      socket.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -134,7 +152,7 @@ export default function WatchCenter() {
 
   useEffect(() => {
     refreshAll();
-    const interval = setInterval(refreshAll, 60000);
+    const interval = setInterval(refreshAll, 30000);
     return () => clearInterval(interval);
   }, [refreshAll]);
 
@@ -249,6 +267,8 @@ export default function WatchCenter() {
 
   const handleAcknowledgeAlerts = () => {
     toast.success(`${alertCount} alert(s) acknowledged`);
+    setLiveAlerts([]);
+    setShowNewAlert(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -419,7 +439,7 @@ export default function WatchCenter() {
       </div>
 
       {highAlerts.length > 0 && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between ${alertCount > 2 ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+        <div className={`p-4 rounded-xl border flex items-center justify-between ${liveAlerts.length > 0 ? 'animate-pulse' : ''} ${alertCount > 2 ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
           <div className="flex items-center gap-3">
             {highAlerts.some(a => a.severity === 'CRITICAL') ? (
               <AlertTriangle size={20} className="text-red-400" />
@@ -438,6 +458,51 @@ export default function WatchCenter() {
             </div>
           </div>
           <button onClick={handleAcknowledgeAlerts} className="btn-secondary text-xs">Acknowledge All</button>
+        </div>
+      )}
+
+      {liveAlerts.length > 0 && (
+        <div className={`card border-l-4 border-l-accent ${showNewAlert ? 'animate-pulse' : ''}`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+              <AlertCircle size={14} className="text-accent" /> Live Alert Feed
+              <span className="text-xs text-text-muted">(Real-time)</span>
+            </h3>
+            <button onClick={() => setLiveAlerts([])} className="text-xs text-text-muted hover:text-text-primary">Clear</button>
+          </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {liveAlerts.map((alert: any, idx: number) => {
+              const severityColor = alert.severity === 'HIGH' || alert.severity === 'CRITICAL' ? 'border-red-500/30 bg-red-500/5' :
+                alert.severity === 'MEDIUM' || alert.severity === 'WARNING' ? 'border-yellow-500/30 bg-yellow-500/5' :
+                'border-blue-500/30 bg-blue-500/5';
+              const iconColor = alert.severity === 'HIGH' || alert.severity === 'CRITICAL' ? 'text-red-400' :
+                alert.severity === 'MEDIUM' || alert.severity === 'WARNING' ? 'text-yellow-400' : 'text-blue-400';
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-center gap-3 p-2.5 rounded-lg border ${severityColor} transition-all`}
+                  style={{
+                    animation: idx === 0 ? 'slideDown 0.3s ease-out' : 'none',
+                    opacity: 1,
+                  }}
+                >
+                  <AlertTriangle size={14} className={iconColor} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{alert.title || alert.message || alert.log_entry || 'New Alert'}</p>
+                    <p className="text-xs text-text-muted">
+                      {alert.severity && <span className={`font-semibold ${iconColor}`}>{alert.severity}</span>}
+                      {alert.created_at && <span className="ml-2">{new Date(alert.created_at).toLocaleTimeString()}</span>}
+                    </p>
+                  </div>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                    alert.severity === 'HIGH' || alert.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-400' :
+                    alert.severity === 'MEDIUM' || alert.severity === 'WARNING' ? 'bg-amber-500/20 text-amber-400' :
+                    'bg-blue-500/20 text-blue-400'
+                  }`}>{alert.severity || 'INFO'}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

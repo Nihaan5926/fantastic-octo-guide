@@ -10,6 +10,9 @@ const store = new Map<string, RateLimitEntry>();
 const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS = 5;
 
+const GENERAL_WINDOW_MS = 60 * 1000;
+const GENERAL_MAX_REQUESTS = 100;
+
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of store) {
@@ -18,6 +21,33 @@ setInterval(() => {
     }
   }
 }, 60_000).unref();
+
+function getRateLimiter(maxRequests: number, windowMs: number) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+
+    const key = `${ip}:${maxRequests}`;
+    const entry = store.get(key);
+
+    if (!entry || now > entry.resetTime) {
+      store.set(key, { count: 1, resetTime: now + windowMs });
+      next();
+      return;
+    }
+
+    if (entry.count >= maxRequests) {
+      res.status(429).json({
+        error: 'Too many requests. Please try again later.',
+        retryAfterSeconds: Math.ceil((entry.resetTime - now) / 1000),
+      });
+      return;
+    }
+
+    entry.count++;
+    next();
+  };
+}
 
 export function loginRateLimiter(req: Request, res: Response, next: NextFunction): void {
   const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.socket.remoteAddress || 'unknown';
@@ -42,3 +72,5 @@ export function loginRateLimiter(req: Request, res: Response, next: NextFunction
   entry.count++;
   next();
 }
+
+export const generalLimiter = getRateLimiter(GENERAL_MAX_REQUESTS, GENERAL_WINDOW_MS);
