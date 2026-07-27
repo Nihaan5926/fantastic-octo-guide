@@ -24,6 +24,8 @@
           window.localStorage.setItem(DEPLOY_KEY, salt);
         }
         function checkDeploy() {
+          // Don't check on auth pages to prevent reload loops
+          if (window.location.pathname === '/login' || window.location.pathname === '/forgot-password' || window.location.pathname === '/reset-password') return;
           fetch('/api/deploy-version', { cache: 'no-store' })
             .then(function(r) { return r.json(); })
             .then(function(data) {

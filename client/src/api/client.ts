@@ -27,6 +27,10 @@ function processQueue(error: any, token: string | null) {
 
 function redirectToLogin() {
   if (redirecting) return;
+  // Don't redirect if already on login page
+  if (window.location.pathname === '/login' || window.location.pathname === '/forgot-password' || window.location.pathname === '/reset-password') {
+    return;
+  }
   redirecting = true;
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
@@ -38,18 +42,18 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
-    // Don't retry refresh or login requests themselves
-    if (original.url === '/auth/refresh' || original.url === '/auth/login') {
+    // Never retry these auth endpoints — they are the authority
+    const skipUrls = ['/auth/refresh', '/auth/login', '/auth/me', '/auth/register'];
+    if (skipUrls.some(url => original.url === url)) {
       return Promise.reject(error);
     }
 
     if (error.response?.status === 401 && !original._retry) {
-      // If already redirecting, don't try again
       if (redirecting) return Promise.reject(error);
 
       if (isRefreshing) {
-        return new Promise<string>((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
+        return new Promise<string>((resolve) => {
+          failedQueue.push({ resolve, reject: () => {} });
         }).then((token) => {
           original.headers.Authorization = `Bearer ${token}`;
           return api(original);
