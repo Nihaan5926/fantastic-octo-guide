@@ -254,7 +254,7 @@ router.get('/aar/:id', async (req: Request, res: Response, next: NextFunction) =
 router.post('/aar', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('after_action_reports').insert({
-      id: uuid(), ...req.body,
+      id: uuid(), author_id: req.user!.userId, ...req.body,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'after_action_report',
