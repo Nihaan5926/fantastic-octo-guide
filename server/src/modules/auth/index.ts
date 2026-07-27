@@ -1,5 +1,7 @@
 import type { Module, ModuleContext } from '../../core/types';
 import router from './router';
+import * as m005 from '../../db/migrations/auth/005_two_factor';
+import * as m006 from '../../db/migrations/auth/006_sessions';
 
 const manifest = {
   name: 'auth',
@@ -15,7 +17,7 @@ const manifest = {
 const authModule: Module = {
   manifest,
   router,
-  migrations: [],
+  migrations: [m005, m006],
 };
 
 export default authModule;

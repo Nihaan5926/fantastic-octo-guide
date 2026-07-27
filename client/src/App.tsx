@@ -5,6 +5,8 @@ import { useAuthStore } from './store/authStore';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import AppShell from './components/layout/AppShell';
 import LoginPage from './pages/Login';
+import ForgotPasswordPage from './pages/ForgotPassword';
+import ResetPasswordPage from './pages/ResetPassword';
 import DashboardPage from './pages/Dashboard';
 import ProfilePage from './pages/Profile';
 import SettingsPage from './pages/Settings';
@@ -98,6 +100,8 @@ export default function App() {
         <Routes>
           <Route element={<GuestRoute />}>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardPage />} />

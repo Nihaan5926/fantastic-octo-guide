@@ -9,6 +9,10 @@ export const adminApi = {
   deleteUser: (id: string) => api.delete(`/admin/users/${id}`).then((r) => r.data),
   permanentDeleteUser: (id: string) => api.delete(`/admin/users/${id}/permanent`).then((r) => r.data),
 
+  // User sessions (admin)
+  getUserSessions: (userId: string) => api.get(`/admin/users/${userId}/sessions`).then((r) => r.data),
+  revokeUserSession: (userId: string, sessionId: string) => api.delete(`/admin/users/${userId}/sessions/${sessionId}`).then((r) => r.data),
+
   // Roles
   listRoles: () => api.get('/admin/roles').then((r) => r.data),
   getRole: (id: string) => api.get(`/admin/roles/${id}`).then((r) => r.data),

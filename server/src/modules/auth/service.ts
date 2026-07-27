@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { v4 as uuid } from 'uuid';
+import { generateSecret as genSecret, generateURI, verifySync } from 'otplib';
 import { db } from '../../db/knex';
 import { config } from '../../config';
 import { AppError } from '../../middleware/error-handler';
@@ -17,6 +19,19 @@ function generateTokens(payload: { userId: string; email: string; role: string; 
   });
 
   return { accessToken, refreshToken };
+}
+
+async function createSession(userId: string, accessToken: string, ip?: string, userAgent?: string) {
+  const tokenHash = crypto.createHash('sha256').update(accessToken).digest('hex');
+  await db('user_sessions').insert({
+    id: uuid(),
+    user_id: userId,
+    token_hash: tokenHash,
+    ip_address: ip || null,
+    user_agent: userAgent || null,
+    expires_at: new Date(Date.now() + 15 * 60 * 1000),
+    is_active: true,
+  });
 }
 
 export async function register(input: RegisterInput) {
@@ -57,18 +72,66 @@ export async function register(input: RegisterInput) {
   return { user: { id: userId, email: input.email.toLowerCase(), role: 'VIEWER' }, ...tokens };
 }
 
-export async function login(input: LoginInput) {
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MINUTES = 15;
+
+async function recordLoginHistory(userId: string | null, ip: string, userAgent: string, success: boolean) {
+  await db('login_history').insert({
+    user_id: userId,
+    ip_address: ip,
+    user_agent: userAgent,
+    success,
+  });
+}
+
+export async function login(input: LoginInput, ip?: string, userAgent?: string) {
   const user = await db('users')
     .select('users.*', 'roles.name as role_name')
     .leftJoin('roles', 'users.role_id', 'roles.id')
     .where({ 'users.email': input.email.toLowerCase() })
     .first();
 
-  if (!user) throw new AppError(401, 'Invalid credentials');
-  if (!user.is_active) throw new AppError(403, 'Account is disabled');
+  if (user?.locked_until && new Date(user.locked_until) > new Date()) {
+    await recordLoginHistory(user.id, ip || '', userAgent || '', false);
+    throw new AppError(423, 'Account is locked due to multiple failed login attempts. Please try again later.');
+  }
+
+  if (!user) {
+    await recordLoginHistory(null, ip || '', userAgent || '', false);
+    throw new AppError(401, 'Invalid credentials');
+  }
+  if (!user.is_active) {
+    await recordLoginHistory(user.id, ip || '', userAgent || '', false);
+    throw new AppError(403, 'Account is disabled');
+  }
 
   const valid = await bcrypt.compare(input.password, user.password_hash);
-  if (!valid) throw new AppError(401, 'Invalid credentials');
+  if (!valid) {
+    const newAttempts = (user.failed_login_attempts || 0) + 1;
+    const updateData: any = { failed_login_attempts: newAttempts };
+    if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+      updateData.locked_until = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
+    }
+    await db('users').where({ id: user.id }).update(updateData);
+    await recordLoginHistory(user.id, ip || '', userAgent || '', false);
+    throw new AppError(401, 'Invalid credentials');
+  }
+
+  await db('users').where({ id: user.id }).update({
+    failed_login_attempts: 0,
+    locked_until: null,
+    last_login_at: db.fn.now(),
+  });
+
+  if (user.totp_enabled) {
+    const tempToken = jwt.sign(
+      { userId: user.id, type: '2fa_temp' },
+      config.jwt.accessSecret,
+      { expiresIn: '5m' },
+    );
+    await recordLoginHistory(user.id, ip || '', userAgent || '', true);
+    return { requires2FA: true, tempToken };
+  }
 
   const tokens = generateTokens({
     userId: user.id,
@@ -76,6 +139,63 @@ export async function login(input: LoginInput) {
     role: user.role_name,
     clearance: user.clearance,
   });
+
+  await createSession(user.id, tokens.accessToken, ip, userAgent);
+
+  await db('refresh_tokens').insert({
+    user_id: user.id,
+    token: tokens.refreshToken,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+
+  await recordLoginHistory(user.id, ip || '', userAgent || '', true);
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      rank: user.rank,
+      clearance: user.clearance,
+      role: user.role_name,
+    },
+    ...tokens,
+  };
+}
+
+export async function completeLogin2fa(tempToken: string, totpCode: string, ip?: string, userAgent?: string) {
+  let payload: any;
+  try {
+    payload = jwt.verify(tempToken, config.jwt.accessSecret);
+  } catch {
+    throw new AppError(401, 'Invalid or expired temporary token');
+  }
+
+  if (payload.type !== '2fa_temp') {
+    throw new AppError(401, 'Invalid temporary token');
+  }
+
+  const user = await db('users')
+    .select('users.*', 'roles.name as role_name')
+    .leftJoin('roles', 'users.role_id', 'roles.id')
+    .where({ 'users.id': payload.userId })
+    .first();
+
+  if (!user || !user.is_active) throw new AppError(403, 'Account unavailable');
+  if (!user.totp_enabled || !user.totp_secret) throw new AppError(400, '2FA not configured');
+
+  const validTotpResult = verifySync({ secret: user.totp_secret, token: totpCode });
+  if (!validTotpResult.valid) throw new AppError(401, 'Invalid 2FA code');
+
+  const tokens = generateTokens({
+    userId: user.id,
+    email: user.email,
+    role: user.role_name,
+    clearance: user.clearance,
+  });
+
+  await createSession(user.id, tokens.accessToken, ip, userAgent);
 
   await db('refresh_tokens').insert({
     user_id: user.id,
@@ -171,6 +291,7 @@ export async function getProfile(userId: string) {
     metadata: user.metadata || {},
     lastLoginAt: user.last_login_at,
     createdAt: user.created_at,
+    totpEnabled: user.totp_enabled || false,
   };
 }
 
@@ -203,6 +324,185 @@ export async function updateProfile(userId: string, data: { firstName?: string; 
   };
 }
 
-export async function logout(token: string) {
+export async function logout(token: string, userId?: string) {
+  if (token) {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    await db('user_sessions').where({ token_hash: tokenHash }).update({ is_active: false });
+  }
+  if (userId) {
+    const stored = await db('refresh_tokens').where({ user_id: userId }).first();
+    if (stored) {
+      await db('refresh_tokens').where({ token: stored.token }).del();
+    }
+  }
   await db('refresh_tokens').where({ token }).del();
+}
+
+// ─── TOTP / Two-Factor ───
+
+export async function setupTOTP(userId: string) {
+  const user = await db('users').where({ id: userId }).first();
+  if (!user) throw new AppError(404, 'User not found');
+
+  if (user.totp_enabled && user.totp_verified) {
+    throw new AppError(400, '2FA is already enabled');
+  }
+
+  const secret = genSecret();
+  const otpauthUrl = generateURI({ secret, label: user.email, issuer: 'IntelPlatform' });
+
+  await db('users').where({ id: userId }).update({
+    totp_secret: secret,
+    totp_verified: false,
+  });
+
+  return { secret, otpauthUrl };
+}
+
+export async function enableTOTP(userId: string, token: string) {
+  const user = await db('users').where({ id: userId }).first();
+  if (!user) throw new AppError(404, 'User not found');
+  if (!user.totp_secret) throw new AppError(400, 'TOTP not set up. Call /2fa/setup first.');
+
+  const result = verifySync({ secret: user.totp_secret, token });
+  if (!result.valid) throw new AppError(400, 'Invalid verification code');
+
+  await db('users').where({ id: userId }).update({
+    totp_verified: true,
+    totp_enabled: true,
+  });
+
+  return { message: '2FA enabled successfully' };
+}
+
+export async function disableTOTP(userId: string) {
+  await db('users').where({ id: userId }).update({
+    totp_secret: null,
+    totp_enabled: false,
+    totp_verified: false,
+  });
+
+  return { message: '2FA disabled' };
+}
+
+export async function verifyTOTP(userId: string, token: string) {
+  const user = await db('users').where({ id: userId }).first();
+  if (!user) throw new AppError(404, 'User not found');
+  if (!user.totp_secret) throw new AppError(400, 'TOTP not configured');
+
+  const result = verifySync({ secret: user.totp_secret, token });
+  return { valid: result.valid };
+}
+
+// ─── Session Management ───
+
+export async function getActiveSessions(userId: string, currentToken?: string) {
+  let currentHash: string | null = null;
+  if (currentToken) {
+    currentHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+  }
+
+  const sessions = await db('user_sessions')
+    .where({ user_id: userId, is_active: true })
+    .where('expires_at', '>', new Date())
+    .orderBy('created_at', 'desc');
+
+  return sessions.map((s: any) => ({
+    id: s.id,
+    ip_address: s.ip_address,
+    user_agent: s.user_agent,
+    created_at: s.created_at,
+    expires_at: s.expires_at,
+    is_current: currentHash ? s.token_hash === currentHash : false,
+  }));
+}
+
+export async function revokeSession(userId: string, sessionId: string) {
+  const session = await db('user_sessions')
+    .where({ id: sessionId, user_id: userId })
+    .first();
+  if (!session) throw new AppError(404, 'Session not found');
+
+  await db('user_sessions').where({ id: sessionId }).update({ is_active: false });
+  return { message: 'Session revoked' };
+}
+
+export async function revokeOtherSessions(userId: string, currentToken: string) {
+  const currentHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+
+  await db('user_sessions')
+    .where({ user_id: userId, is_active: true })
+    .whereNot({ token_hash: currentHash })
+    .update({ is_active: false });
+
+  return { message: 'All other sessions revoked' };
+}
+
+// ─── Admin session management ───
+
+export async function getSessionsForAdmin(userId: string) {
+  const sessions = await db('user_sessions')
+    .where({ user_id: userId, is_active: true })
+    .where('expires_at', '>', new Date())
+    .orderBy('created_at', 'desc');
+
+  return sessions.map((s: any) => ({
+    id: s.id,
+    ip_address: s.ip_address,
+    user_agent: s.user_agent,
+    created_at: s.created_at,
+    expires_at: s.expires_at,
+    is_current: false,
+  }));
+}
+
+export async function generateResetToken(email: string) {
+  const user = await db('users').where({ email: email.toLowerCase() }).first();
+  if (!user) return;
+
+  await db('password_reset_tokens').where({ user_id: user.id }).del();
+
+  const token = uuid();
+  await db('password_reset_tokens').insert({
+    user_id: user.id,
+    token,
+    expires_at: new Date(Date.now() + 60 * 60 * 1000),
+  });
+
+  return token;
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  const record = await db('password_reset_tokens').where({ token }).first();
+  if (!record) throw new AppError(400, 'Invalid or expired reset token');
+  if (new Date(record.expires_at) < new Date()) {
+    await db('password_reset_tokens').where({ id: record.id }).del();
+    throw new AppError(400, 'Reset token has expired');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db('users').where({ id: record.user_id }).update({
+    password_hash: passwordHash,
+    failed_login_attempts: 0,
+    locked_until: null,
+    updated_at: db.fn.now(),
+  });
+
+  await db('password_reset_tokens').where({ id: record.id }).del();
+}
+
+export async function getLoginHistory(userId: string) {
+  const history = await db('login_history')
+    .where({ user_id: userId })
+    .orderBy('created_at', 'desc')
+    .limit(20)
+    .select('id', 'ip_address', 'user_agent', 'success', 'created_at');
+
+  return history.map((entry) => ({
+    id: entry.id,
+    ipAddress: entry.ip_address,
+    userAgent: entry.user_agent,
+    success: entry.success,
+    createdAt: entry.created_at,
+  }));
 }

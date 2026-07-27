@@ -263,6 +263,24 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
   } catch (e) { next(e); }
 });
 
+// ─── USER SESSIONS (admin) ───
+
+router.get('/users/:id/sessions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { getSessionsForAdmin } = await import('../auth/service');
+    const sessions = await getSessionsForAdmin(req.params.id);
+    res.json({ data: sessions });
+  } catch (e) { next(e); }
+});
+
+router.delete('/users/:userId/sessions/:sessionId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { revokeSession } = await import('../auth/service');
+    const result = await revokeSession(req.params.userId, req.params.sessionId);
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
 // ─── HEALTH ───
 
 router.get('/health', async (_req: Request, res: Response, next: NextFunction) => {

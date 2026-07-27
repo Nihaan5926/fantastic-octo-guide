@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Edit, Shield, UserCheck, UserX, RefreshCw, Loader2, Search, Download, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Edit, Shield, UserCheck, UserX, RefreshCw, Loader2, Search, Download, ChevronDown, Monitor, Loader } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { adminApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
@@ -34,6 +34,12 @@ export default function AdminUsers() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+
+  // Sessions
+  const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
+  const [sessionsUser, setSessionsUser] = useState<any>(null);
+  const [sessionsData, setSessionsData] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -142,6 +148,31 @@ export default function AdminUsers() {
     setPermInput('');
   };
 
+  const openSessions = async (user: any) => {
+    setSessionsUser(user);
+    setSessionsModalOpen(true);
+    setSessionsLoading(true);
+    try {
+      const data = await adminApi.getUserSessions(user.id);
+      setSessionsData(data.data || []);
+    } catch {
+      toast.error('Failed to load sessions');
+      setSessionsData([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (userId: string, sessionId: string) => {
+    try {
+      await adminApi.revokeUserSession(userId, sessionId);
+      setSessionsData((prev) => prev.filter((s) => s.id !== sessionId));
+      toast.success('Session revoked');
+    } catch {
+      toast.error('Failed to revoke session');
+    }
+  };
+
   const userColumns = [
     { key: 'email', label: 'Email', render: (u: any) => <span className="font-medium">{u.email}</span> },
     { key: 'name', label: 'Name', render: (u: any) => <span>{u.first_name} {u.last_name}</span> },
@@ -150,6 +181,7 @@ export default function AdminUsers() {
     { key: 'is_active', label: 'Status', render: (u: any) => u.is_active ? <StatusBadge label="Active" color="green" /> : <StatusBadge label="Disabled" color="red" /> },
     { key: 'actions', label: '', render: (u: any) => (
       <div className="flex gap-1">
+        <button onClick={(e) => { e.stopPropagation(); openSessions(u); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary" title="Sessions"><Monitor size={14} /></button>
         <button onClick={(e) => { e.stopPropagation(); openEditUser(u); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary"><Edit size={14} /></button>
         <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400" title="Deactivate"><UserX size={14} /></button>
         <button onClick={(e) => { e.stopPropagation(); setPermDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-700/30 text-red-500" title="Delete permanently"><Trash2 size={14} /></button>
@@ -283,6 +315,37 @@ export default function AdminUsers() {
       <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={async () => { if (deleteTarget) { await deleteUser(deleteTarget.id); setDeleteTarget(null); toast.success('User deactivated'); } }} title="Deactivate User" message={`Deactivate ${deleteTarget?.first_name} ${deleteTarget?.last_name}? They will not be able to log in.`} confirmLabel="Deactivate" />
       <ConfirmDialog isOpen={!!permDeleteTarget} onClose={() => setPermDeleteTarget(null)} onConfirm={async () => { if (permDeleteTarget) { await permanentDeleteUser(permDeleteTarget.id); setPermDeleteTarget(null); toast.success('User permanently deleted'); } }} title="Delete User Permanently" message={`Permanently delete ${permDeleteTarget?.first_name} ${permDeleteTarget?.last_name}? This action CANNOT be undone. All associated data will also be removed.`} confirmLabel="Delete Permanently" variant="danger" />
       <ConfirmDialog isOpen={!!deleteRoleTarget} onClose={() => setDeleteRoleTarget(null)} onConfirm={async () => { if (deleteRoleTarget) { try { await deleteRole(deleteRoleTarget.id); setDeleteRoleTarget(null); toast.success('Role deleted'); } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); } } }} title="Delete Role" message={`Delete role "${deleteRoleTarget?.name}"? This cannot be undone if the role is assigned to users.`} confirmLabel="Delete" />
+
+      {/* Sessions Modal */}
+      <Modal isOpen={sessionsModalOpen} onClose={() => { setSessionsModalOpen(false); setSessionsData([]); setSessionsUser(null); }} title={`Sessions - ${sessionsUser?.first_name} ${sessionsUser?.last_name}`}>
+        {sessionsLoading ? (
+          <div className="text-center py-8">
+            <Loader className="animate-spin mx-auto mb-2 text-text-muted" size={24} />
+            <p className="text-sm text-text-muted">Loading sessions...</p>
+          </div>
+        ) : sessionsData.length === 0 ? (
+          <p className="text-sm text-text-muted text-center py-4">No active sessions found</p>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {sessionsData.map((s: any) => (
+              <div key={s.id} className="flex items-center justify-between p-3 bg-bg-primary rounded-lg">
+                <div>
+                  <p className="text-sm font-medium">
+                    {s.user_agent ? (s.user_agent.includes('Firefox') ? 'Firefox' : s.user_agent.includes('Chrome') ? 'Chrome' : s.user_agent.includes('Safari') ? 'Safari' : 'Browser') : 'Unknown'}
+                  </p>
+                  <p className="text-xs text-text-muted">{s.ip_address || 'Unknown IP'} · {new Date(s.created_at).toLocaleString()}</p>
+                </div>
+                <button
+                  onClick={() => handleRevokeSession(sessionsUser?.id, s.id)}
+                  className="btn-secondary text-xs text-accent-danger py-1 px-2"
+                >
+                  Revoke
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

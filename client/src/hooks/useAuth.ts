@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 
 export function useAuth() {
-  const { user, isAuthenticated, isLoading, login, register, logout, fetchProfile, clearError, error } =
+  const { user, isAuthenticated, isLoading, login, login2FA, register, logout, fetchProfile, clearError, error } =
     useAuthStore();
   const navigate = useNavigate();
 
@@ -15,6 +15,14 @@ export function useAuth() {
 
   const handleLogin = async (email: string, password: string) => {
     await login(email, password);
+    const state = useAuthStore.getState();
+    if (!state.requires2FA) {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleLogin2FA = async (totpCode: string) => {
+    await login2FA(totpCode);
     navigate('/dashboard');
   };
 
@@ -34,6 +42,7 @@ export function useAuth() {
     isLoading,
     error,
     login: handleLogin,
+    login2FA: handleLogin2FA,
     register: handleRegister,
     logout: handleLogout,
     clearError,

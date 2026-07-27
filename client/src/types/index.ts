@@ -10,6 +10,16 @@ export interface User {
   metadata?: Record<string, any>;
   lastLoginAt?: string;
   createdAt?: string;
+  totpEnabled?: boolean;
+}
+
+export interface SessionInfo {
+  id: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  expires_at: string;
+  is_current: boolean;
 }
 
 export interface AuthTokens {
@@ -21,6 +31,11 @@ export interface AuthResponse {
   user: User;
   accessToken: string;
   refreshToken: string;
+}
+
+export interface LoginResponse extends AuthResponse {
+  requires2FA?: boolean;
+  tempToken?: string;
 }
 
 export interface NavItem {
