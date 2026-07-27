@@ -17,14 +17,17 @@ export function createWebSocketServer(httpServer: HttpServer): SocketIOServer {
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
-      return next(new Error('Authentication required'));
+      // Allow unauthenticated connections — they just won't get user-specific events
+      return next();
     }
     try {
       const payload = jwt.verify(token, config.jwt.accessSecret) as JwtPayload;
       (socket as any).user = payload;
       next();
     } catch {
-      next(new Error('Invalid token'));
+      // Token invalid/expired — still allow connection, just without user context
+      console.warn('[WS] Invalid token from client');
+      next();
     }
   });
 
