@@ -157,15 +157,19 @@ export default function MessagesList() {
   const handleSendMessage = async () => {
     if (!messageText.trim() || !store.selectedChannel) return;
     const channelId = store.selectedChannel.id;
-    socket.emit('message:send', {
-      channel_id: channelId,
-      body: messageText,
-      subject: messageText.slice(0, 50),
-    });
-    setMessageText('');
-    socket.emit('typing:stop', { channelId });
-    toast.success('Message sent');
-    setTimeout(() => store.fetchMessages(channelId), 300);
+    try {
+      if (socket.connected) {
+        socket.emit('message:send', { channelId: channelId, body: messageText, subject: messageText.slice(0, 50) });
+      } else {
+        await store.sendMessage(channelId, { body: messageText, subject: messageText.slice(0, 50) });
+      }
+      setMessageText('');
+      socket.emit('typing:stop', { channelId });
+      toast.success('Message sent');
+      setTimeout(() => store.fetchMessages(channelId), 300);
+    } catch (err: any) {
+      toast.error('Failed to send message');
+    }
   };
 
   const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
