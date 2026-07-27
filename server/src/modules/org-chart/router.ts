@@ -137,6 +137,21 @@ router.delete('/units/:id', async (req: Request, res: Response, next: NextFuncti
 
 router.get('/assignments', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Auto-create table if missing
+    if (!await db.schema.hasTable('personnel_assignments')) {
+      await db.schema.createTable('personnel_assignments', (t) => {
+        t.uuid('id').primary().defaultTo(db.raw('gen_random_uuid()'));
+        t.uuid('user_id').notNullable();
+        t.uuid('org_unit_id').notNullable();
+        t.string('position_title', 200).nullable();
+        t.boolean('is_primary').defaultTo(false);
+        t.date('start_date').nullable();
+        t.date('end_date').nullable();
+        t.timestamp('created_at').defaultTo(db.fn.now());
+      });
+      return res.json({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;

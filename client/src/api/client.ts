@@ -14,6 +14,7 @@ api.interceptors.request.use((config) => {
 });
 
 let isRefreshing = false;
+let redirecting = false;
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
 
 function processQueue(error: any, token: string | null) {
@@ -22,6 +23,14 @@ function processQueue(error: any, token: string | null) {
     else p.resolve(token!);
   });
   failedQueue = [];
+}
+
+function redirectToLogin() {
+  if (redirecting) return;
+  redirecting = true;
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  window.location.replace('/login');
 }
 
 api.interceptors.response.use(
@@ -35,12 +44,17 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401 && !original._retry) {
+      // If already redirecting, don't try again
+      if (redirecting) return Promise.reject(error);
+
       if (isRefreshing) {
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then((token) => {
           original.headers.Authorization = `Bearer ${token}`;
           return api(original);
+        }).catch(() => {
+          return Promise.reject(error);
         });
       }
 
@@ -60,17 +74,14 @@ api.interceptors.response.use(
         } catch {
           processQueue(new Error('Refresh failed'), null);
           isRefreshing = false;
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          window.location.href = '/login';
+          redirectToLogin();
           return Promise.reject(error);
         }
       }
 
       isRefreshing = false;
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      window.location.href = '/login';
+      redirectToLogin();
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   }
