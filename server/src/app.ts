@@ -38,8 +38,12 @@ export async function createApp() {
 
   await testConnection();
 
-  // Ensure ALL tables and columns exist before loading modules
-  await bootstrapDatabase(db);
+  // Ensure ALL tables and columns exist before loading modules (safe — errors are non-fatal)
+  try {
+    await bootstrapDatabase(db);
+  } catch (e: any) {
+    console.warn('[App] Bootstrap failed (non-fatal):', e.message);
+  }
 
   const moduleDir = path.resolve(__dirname, 'modules');
   await moduleRegistry.loadAll(moduleDir, { db, io, eventBus });

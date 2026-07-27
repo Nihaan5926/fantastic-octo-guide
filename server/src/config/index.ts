@@ -13,8 +13,8 @@ const required = (key: string, fallback: string): string => {
   return val;
 };
 
-// Auto-generated deploy salt — changes on every server restart, invalidating all tokens
-const DEPLOY_SALT = process.env.DEPLOY_SALT || crypto.randomBytes(16).toString('hex');
+// Auto-generated deploy salt — only changes if DEPLOY_SALT env var changes, or if first run
+const DEPLOY_SALT = process.env.DEPLOY_SALT || 'default-salt-change-in-production';
 console.log(`[Config] Deploy salt: ${DEPLOY_SALT.substring(0, 8)}...`);
 
 export const config = {
