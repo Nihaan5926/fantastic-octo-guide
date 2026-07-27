@@ -11,39 +11,5 @@
   <body class="bg-bg-primary text-text-primary font-sans antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // Cache busting: auto-reload when server is redeployed
-      (function() {
-        var DEPLOY_KEY = 'icmp-deploy-salt';
-        var CHECK_INTERVAL = 30000; // 30 seconds
-        function getCurrentSalt() {
-          return window.sessionStorage.getItem(DEPLOY_KEY) || window.localStorage.getItem(DEPLOY_KEY);
-        }
-        function setCurrentSalt(salt) {
-          window.sessionStorage.setItem(DEPLOY_KEY, salt);
-          window.localStorage.setItem(DEPLOY_KEY, salt);
-        }
-        function checkDeploy() {
-          // Don't check on auth pages to prevent reload loops
-          if (window.location.pathname === '/login' || window.location.pathname === '/forgot-password' || window.location.pathname === '/reset-password') return;
-          fetch('/api/deploy-version', { cache: 'no-store' })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              var current = getCurrentSalt();
-              if (!current) {
-                setCurrentSalt(data.deploySalt);
-              } else if (current !== data.deploySalt) {
-                // Server was redeployed — force reload
-                window.location.reload(true);
-              }
-            })
-            .catch(function() { /* ignore errors */ });
-        }
-        // Check immediately on load
-        setTimeout(checkDeploy, 1000);
-        // Then periodically
-        setInterval(checkDeploy, CHECK_INTERVAL);
-      })();
-    </script>
   </body>
 </html>
