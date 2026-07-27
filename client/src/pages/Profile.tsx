@@ -35,8 +35,11 @@ export default function ProfilePage() {
         rank: user.rank || '',
         clearance: user.clearance || 'UNCLASSIFIED',
       });
-      if ((user as any)?.metadata?.notifications) {
-        setNotifPrefs((prev) => ({ ...prev, ...(user as any).metadata.notifications }));
+      // Parse metadata - server returns JSONB which may be parsed or string
+      let meta = (user as any).metadata;
+      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch {} }
+      if (meta?.notifications) {
+        setNotifPrefs((prev) => ({ ...prev, ...meta.notifications }));
       }
       setProfileLoaded(true);
     }
@@ -82,6 +85,7 @@ export default function ProfilePage() {
     setIsSaving(true);
     try {
       await api.patch('/auth/me', { metadata: { notifications: notifPrefs } });
+      await fetchProfile();
       toast.success('Notification preferences saved');
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed');

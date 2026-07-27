@@ -186,7 +186,7 @@ export async function updateProfile(userId: string, data: { firstName?: string; 
     updateData.password_hash = await bcrypt.hash(data.password, 12);
   }
   if (data.metadata !== undefined) {
-    updateData.metadata = typeof data.metadata === 'object' ? JSON.stringify(data.metadata) : data.metadata;
+    updateData.metadata = data.metadata;
   }
 
   const [user] = await db('users').where({ id: userId }).update(updateData).returning('*');
