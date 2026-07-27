@@ -233,6 +233,16 @@ export async function bootstrapDatabase(db: knex.Knex) {
     console.warn('[Bootstrap] course_date failed:', e.message);
   }
 
+  // Fix NOT NULL constraints that prevent standalone record creation
+  try {
+    await db.raw('ALTER TABLE personnel_records ALTER COLUMN user_id DROP NOT NULL').catch(() => {});
+    await db.raw('ALTER TABLE shift_schedules ALTER COLUMN user_id DROP NOT NULL').catch(() => {});
+    await db.raw('ALTER TABLE watch_logs ALTER COLUMN author_id DROP NOT NULL').catch(() => {});
+    await db.raw('ALTER TABLE sitreps ALTER COLUMN author_id DROP NOT NULL').catch(() => {});
+    await db.raw('ALTER TABLE declassification_requests ALTER COLUMN record_id DROP NOT NULL').catch(() => {});
+    await db.raw('ALTER TABLE mission_debriefs ADD COLUMN IF NOT EXISTS title varchar(500)').catch(() => {});
+  } catch(e: any) {}
+
   console.log('[Bootstrap] Database schema check complete.');
 }
 
