@@ -12,7 +12,6 @@ import { eventBus } from './core/event-bus';
 import { createWebSocketServer, getIO } from './websocket';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import { authenticate } from './middleware/auth';
-import { generalLimiter } from './middleware/rate-limiter';
 import { maintenanceGuard } from './middleware/maintenance';
 import { apiKeyAuth } from './middleware/api-key-auth';
 
@@ -46,9 +45,6 @@ export async function createApp() {
 
   const moduleDir = path.resolve(__dirname, 'modules');
   await moduleRegistry.loadAll(moduleDir, { db, io, eventBus });
-
-  // Apply general rate limiter to all API routes (100 req/min per IP)
-  app.use('/api', generalLimiter);
 
   // API key authentication (before JWT auth)
   app.use('/api', apiKeyAuth);

@@ -2,7 +2,6 @@ import { Router, Request, Response, NextFunction } from 'express';
 import * as service from './service';
 import { registerSchema, loginSchema, refreshSchema, totpTokenSchema, login2faSchema, forgotPasswordSchema, resetPasswordSchema, deleteAccountSchema } from './validator';
 import { authenticate } from '../../middleware/auth';
-import { loginRateLimiter } from '../../middleware/rate-limiter';
 import { eventBus } from '../../core/event-bus';
 import { logger } from '../../utils/logger';
 import multer from 'multer';
@@ -48,7 +47,7 @@ router.post('/register', validate(registerSchema), async (req: Request, res: Res
   } catch (e) { next(e); }
 });
 
-router.post('/login', loginRateLimiter, validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/login', validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { ip, userAgent } = getClientInfo(req);
     const result = await service.login(req.body, ip, userAgent);
