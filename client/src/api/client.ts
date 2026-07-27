@@ -27,11 +27,22 @@ function processQueue(error: any, token: string | null) {
 
 function redirectToLogin() {
   if (redirecting) return;
-  // Don't redirect if already on login page
+  // Don't redirect if already on auth pages
   if (window.location.pathname === '/login' || window.location.pathname === '/forgot-password' || window.location.pathname === '/reset-password') {
     return;
   }
+  // Don't redirect if we just logged in (within last 10 seconds)
+  const loginTime = localStorage.getItem('loginTime');
+  if (loginTime && (Date.now() - parseInt(loginTime)) < 10000) {
+    return;
+  }
+  // Don't redirect more than once every 30 seconds
+  const lastRedirect = sessionStorage.getItem('lastRedirect');
+  if (lastRedirect && (Date.now() - parseInt(lastRedirect)) < 30000) {
+    return;
+  }
   redirecting = true;
+  sessionStorage.setItem('lastRedirect', String(Date.now()));
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   window.location.replace('/login');
@@ -71,6 +82,7 @@ api.interceptors.response.use(
           const { data } = await axios.post('/api/auth/refresh', { refreshToken });
           localStorage.setItem('accessToken', data.accessToken);
           localStorage.setItem('refreshToken', data.refreshToken);
+          localStorage.setItem('loginTime', String(Date.now()));
           processQueue(null, data.accessToken);
           isRefreshing = false;
           original.headers.Authorization = `Bearer ${data.accessToken}`;
