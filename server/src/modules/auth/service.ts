@@ -14,6 +14,59 @@ function isSchemaError(e: any): boolean {
   return e?.message?.includes('does not exist') || false;
 }
 
+async function ensureTables() {
+  try {
+    if (!await db.schema.hasTable('user_sessions')) {
+      await db.schema.createTable('user_sessions', (t: any) => {
+        t.uuid('id').primary().defaultTo(db.raw('gen_random_uuid()'));
+        t.uuid('user_id').references('id').inTable('users').onDelete('CASCADE');
+        t.string('token_hash', 500);
+        t.string('ip_address', 50);
+        t.text('user_agent');
+        t.timestamp('created_at').defaultTo(db.fn.now());
+        t.timestamp('expires_at');
+        t.boolean('is_active').defaultTo(true);
+      });
+      logger.info('[Auth] Created user_sessions table');
+    }
+    if (!await db.schema.hasTable('password_reset_tokens')) {
+      await db.schema.createTable('password_reset_tokens', (t: any) => {
+        t.uuid('id').primary().defaultTo(db.raw('gen_random_uuid()'));
+        t.uuid('user_id').references('id').inTable('users').onDelete('CASCADE');
+        t.string('token', 500).unique();
+        t.timestamp('expires_at').notNullable();
+        t.timestamp('created_at').defaultTo(db.fn.now());
+      });
+      logger.info('[Auth] Created password_reset_tokens table');
+    }
+    if (!await db.schema.hasTable('login_history')) {
+      await db.schema.createTable('login_history', (t: any) => {
+        t.uuid('id').primary().defaultTo(db.raw('gen_random_uuid()'));
+        t.uuid('user_id').references('id').inTable('users').onDelete('CASCADE');
+        t.string('ip_address', 50);
+        t.text('user_agent');
+        t.boolean('success').defaultTo(true);
+        t.timestamp('created_at').defaultTo(db.fn.now());
+      });
+      logger.info('[Auth] Created login_history table');
+    }
+    const hasCol = await db.schema.hasColumn('users', 'failed_login_attempts');
+    if (!hasCol) {
+      await db.schema.alterTable('users', (t: any) => {
+        t.integer('failed_login_attempts').defaultTo(0);
+        t.timestamp('locked_until').nullable();
+        t.string('totp_secret').nullable();
+        t.boolean('totp_enabled').defaultTo(false);
+        t.boolean('totp_verified').defaultTo(false);
+        t.string('avatar_url', 1000).nullable();
+      });
+      logger.info('[Auth] Added missing columns to users table');
+    }
+  } catch(e: any) {
+    logger.warn('[Auth] Could not auto-create tables:', e);
+  }
+}
+
 function generateTokens(payload: { userId: string; email: string; role: string; clearance: string }) {
   const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
     expiresIn: config.jwt.accessExpires as any,
@@ -27,6 +80,7 @@ function generateTokens(payload: { userId: string; email: string; role: string; 
 }
 
 async function createSession(userId: string, accessToken: string, ip?: string, userAgent?: string) {
+  await ensureTables();
   try {
     const tokenHash = crypto.createHash('sha256').update(accessToken).digest('hex');
     await db('user_sessions').insert({
@@ -103,6 +157,7 @@ async function recordLoginHistory(userId: string | null, ip: string, userAgent: 
 }
 
 export async function login(input: LoginInput, ip?: string, userAgent?: string) {
+  await ensureTables();
   const user = await db('users')
     .select('users.*', 'roles.name as role_name')
     .leftJoin('roles', 'users.role_id', 'roles.id')
@@ -450,6 +505,7 @@ export async function verifyTOTP(userId: string, token: string) {
 // ─── Session Management ───
 
 export async function getActiveSessions(userId: string, currentToken?: string) {
+  await ensureTables();
   try {
     let currentHash: string | null = null;
     if (currentToken) {
@@ -530,6 +586,7 @@ export async function getSessionsForAdmin(userId: string) {
 }
 
 export async function generateResetToken(email: string) {
+  await ensureTables();
   const user = await db('users').where({ email: email.toLowerCase() }).first();
   if (!user) return;
 
