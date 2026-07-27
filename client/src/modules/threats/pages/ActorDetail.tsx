@@ -10,8 +10,10 @@ import { FormInput, FormSelect } from '../../../components/common/FormComponents
 import { StatusBadge } from '../../../components/common/Badges';
 import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Trash2, ArrowLeft, Plus, Download, Activity, Clock, File, Paperclip, Search, X, RefreshCw } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, Download, Activity, Clock, File, Paperclip, Search, X, RefreshCw, Upload } from 'lucide-react';
 import FileUpload from '../../../components/common/FileUpload';
+import BulkImport from '../../../components/common/BulkImport';
+import type { Column } from '../../../components/common/BulkImport';
 
 const statusColorMap: Record<string, string> = {
   ACTIVE: 'red', INACTIVE: 'gray', DEFUNCT: 'purple', MONITORED: 'yellow',
@@ -203,6 +205,24 @@ export default function ActorDetail() {
   const [actorTtps, setActorTtps] = useState<any[]>([]);
   const [riskBreakdown, setRiskBreakdown] = useState<any>(null);
   const [recalculating, setRecalculating] = useState(false);
+  const [importIndicatorsOpen, setImportIndicatorsOpen] = useState(false);
+
+  const indicatorImportColumns: Column[] = [
+    { key: 'type', label: 'Type', required: true },
+    { key: 'value', label: 'Value', required: true },
+    { key: 'confidence', label: 'Confidence' },
+  ];
+
+  const handleImportIndicators = async (rows: Record<string, any>[]) => {
+    if (!id) return;
+    const indicators = rows.map((row) => ({
+      ...row,
+      threat_actor_id: id,
+    }));
+    await threatsApi.importBulk({ indicators });
+    fetchIndicators(id);
+    fetchActorSummary(id);
+  };
 
   useEffect(() => {
     if (id) {
@@ -545,6 +565,9 @@ export default function ActorDetail() {
     <div>
       <PageHeader title={selectedActor?.name || 'Actor Detail'} subtitle="View actor details and associated indicators">
         <div className="flex items-center gap-2">
+          <button onClick={() => setImportIndicatorsOpen(true)} className="btn-secondary flex items-center gap-2 text-sm">
+            <Upload size={16} /> Import Indicators
+          </button>
           <button onClick={handleExportSTIX} className="btn-secondary flex items-center gap-2 text-sm">
             <Download size={16} /> Export STIX
           </button>
@@ -896,6 +919,15 @@ export default function ActorDetail() {
         title="Delete Attachment"
         message="Are you sure you want to delete this attachment? This action cannot be undone."
         isLoading={false}
+      />
+
+      <BulkImport
+        isOpen={importIndicatorsOpen}
+        onClose={() => setImportIndicatorsOpen(false)}
+        entityType="indicator"
+        columns={indicatorImportColumns}
+        onImport={handleImportIndicators}
+        title="Import Indicators"
       />
     </div>
   );

@@ -215,6 +215,46 @@ router.post('/actors/:id/calculate-risk', async (req: Request, res: Response, ne
   } catch (e) { next(e); }
 });
 
+router.put('/actors/:id/assessment', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const actor = await db('threat_actors').where({ id: req.params.id }).first();
+    if (!actor) { res.status(404).json({ error: 'Not found' }); return; }
+
+    const { likelihood, impact } = req.body;
+    if (!likelihood || !impact || likelihood < 1 || likelihood > 5 || impact < 1 || impact > 5) {
+      res.status(400).json({ error: 'Likelihood and impact must be between 1 and 5' });
+      return;
+    }
+
+    const existingMeta = typeof actor.metadata === 'string' ? JSON.parse(actor.metadata || '{}') : (actor.metadata || {});
+    const riskScore = likelihood * impact;
+    const updatedMeta = {
+      ...existingMeta,
+      riskAssessment: { likelihood, impact },
+      risk_score: riskScore,
+    };
+
+    await db('threat_actors').where({ id: req.params.id }).update({
+      metadata: JSON.stringify(updatedMeta),
+    });
+
+    eventBus.emit('entity:updated', {
+      entityType: 'threat_actor',
+      entityId: actor.id,
+      title: actor.name || 'Updated threat actor',
+      userId: req.user!.userId,
+    });
+
+    res.json({
+      id: actor.id,
+      likelihood,
+      impact,
+      risk_score: riskScore,
+      metadata: updatedMeta,
+    });
+  } catch (e) { next(e); }
+});
+
 // ── Generic Threat Actor Routes (must come LAST among same method) ──
 
 router.get('/actors/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -317,5 +357,144 @@ function calculateRiskScore(sophistication: string | null, indicators: any[]): n
   const avgConf = indicators.reduce((sum: number, ind: any) => sum + (confidenceOrder[ind.confidence] || 25), 0) / indicators.length;
   return Math.round(sophWeight * 0.5 + avgConf * 0.5);
 }
+
+// ── Watchlist Screening ──
+
+router.post('/screening', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { values } = req.body;
+    if (!Array.isArray(values) || values.length === 0) {
+      res.status(400).json({ error: 'values array is required' });
+      return;
+    }
+
+    const trimmedValues = values.map((v: string) => String(v).trim()).filter(Boolean);
+
+    const results: any[] = [];
+
+    for (const input of trimmedValues) {
+      const exactMatches = await db('indicators')
+        .select('indicators.*', 'threat_actors.name as actor_name')
+        .leftJoin('threat_actors', 'indicators.threat_actor_id', 'threat_actors.id')
+        .where(function () {
+          this.where('indicators.value', 'ilike', input)
+            .orWhere('indicators.value', 'ilike', `%${input}%`);
+        });
+
+      if (exactMatches.length > 0) {
+        for (const match of exactMatches) {
+          const isExact = match.value.toLowerCase() === input.toLowerCase();
+          results.push({
+            input,
+            matched: true,
+            matchType: isExact ? 'exact' : 'contains',
+            indicatorId: match.id,
+            indicatorType: match.type,
+            indicatorValue: match.value,
+            confidence: match.confidence,
+            actorName: match.actor_name || 'Unknown',
+            actorId: match.threat_actor_id,
+          });
+        }
+      } else {
+        results.push({
+          input,
+          matched: false,
+        });
+      }
+    }
+
+    const matchCount = results.filter((r) => r.matched).length;
+    const uniqueMatchedInputs = new Set(results.filter((r) => r.matched).map((r) => r.input)).size;
+
+    res.json({
+      data: results,
+      summary: {
+        totalInputs: trimmedValues.length,
+        totalMatches: matchCount,
+        uniqueMatchedInputs,
+        inputsWithNoMatch: trimmedValues.length - uniqueMatchedInputs,
+      },
+    });
+  } catch (e) { next(e); }
+});
+
+// ── Bulk Import ──
+
+router.post('/import', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { actors = [], indicators = [] } = req.body;
+    const errors: any[] = [];
+    const createdActors: any[] = [];
+    const createdIndicators: any[] = [];
+
+    for (const actorData of actors) {
+      try {
+        if (!actorData.name) {
+          errors.push({ type: 'actor', row: actorData._row, error: 'Name is required' });
+          continue;
+        }
+        const [actor] = await db('threat_actors').insert({
+          id: uuid(),
+          name: actorData.name,
+          aliases: typeof actorData.aliases === 'string' ? JSON.parse(actorData.aliases || '[]') : (Array.isArray(actorData.aliases) ? actorData.aliases : []),
+          description: actorData.description || null,
+          motivation: actorData.motivation || null,
+          sophistication: actorData.sophistication || 'MEDIUM',
+          status: actorData.status || 'ACTIVE',
+        }).returning('*');
+        createdActors.push(actor);
+
+        eventBus.emit('entity:created', {
+          entityType: 'threat_actor',
+          entityId: actor.id,
+          title: actor.name,
+          userId: req.user!.userId,
+        });
+      } catch (err: any) {
+        errors.push({ type: 'actor', row: actorData._row, error: err.message });
+      }
+    }
+
+    for (const indData of indicators) {
+      try {
+        if (!indData.value || !indData.type) {
+          errors.push({ type: 'indicator', row: indData._row, error: 'Value and type are required' });
+          continue;
+        }
+        let actorId = indData.threat_actor_id;
+        if (!actorId && indData.actor_name) {
+          const actor = await db('threat_actors').where('name', 'ilike', indData.actor_name.trim()).first();
+          if (actor) {
+            actorId = actor.id;
+          } else {
+            errors.push({ type: 'indicator', row: indData._row, error: `Actor "${indData.actor_name}" not found` });
+            continue;
+          }
+        }
+        if (!actorId) {
+          errors.push({ type: 'indicator', row: indData._row, error: 'threat_actor_id or actor_name is required' });
+          continue;
+        }
+        const [indicator] = await db('indicators').insert({
+          id: uuid(),
+          threat_actor_id: actorId,
+          type: indData.type,
+          value: indData.value,
+          confidence: indData.confidence || 'MEDIUM',
+        }).returning('*');
+        createdIndicators.push(indicator);
+      } catch (err: any) {
+        errors.push({ type: 'indicator', row: indData._row, error: err.message });
+      }
+    }
+
+    res.status(201).json({
+      created: { actors: createdActors.length, indicators: createdIndicators.length },
+      total: { actors: actors.length, indicators: indicators.length },
+      errors,
+    });
+  } catch (e) { next(e); }
+});
 
 export default router;

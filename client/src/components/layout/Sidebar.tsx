@@ -6,7 +6,7 @@ import {
   UserCheck, GraduationCap, Clock, Target, Crosshair,
   ListChecks, Map, Radio, Fingerprint, DollarSign,
   UserX, MessageSquare, Presentation, Building2,
-  Scale, Archive, Wallet, ChevronDown, Activity, Upload, Terminal
+  Scale, Archive, Wallet, ChevronDown, Activity, Upload, Terminal, GitBranch, Grid3X3
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -23,6 +23,8 @@ const iconMap: Record<string, React.ReactNode> = {
   Activity: <Activity size={18} />,
   Upload: <Upload size={18} />,
   Terminal: <Terminal size={18} />,
+  GitBranch: <GitBranch size={18} />,
+  Grid3X3: <Grid3X3 size={18} />,
   UserCheck: <UserCheck size={18} />,
   GraduationCap: <GraduationCap size={18} />,
   Clock: <Clock size={18} />,
@@ -53,7 +55,10 @@ const staticNavItems: { category: string; items: { label: string; path: string; 
     { label: 'Evidence', path: '/evidence', icon: 'FolderOpen', category: 'CORE INTEL', order: 13 },
     { label: 'OSINT', path: '/osint', icon: 'Globe', category: 'CORE INTEL', order: 14 },
     { label: 'Analysis', path: '/analysis', icon: 'BarChart3', category: 'CORE INTEL', order: 15 },
+    { label: 'Link Analysis', path: '/analysis/link-analysis', icon: 'GitBranch', category: 'CORE INTEL', order: 15.1 },
+    { label: 'Timeline', path: '/analysis/timeline', icon: 'Clock', category: 'CORE INTEL', order: 15.2 },
     { label: 'Threats', path: '/threats', icon: 'Shield', category: 'CORE INTEL', order: 16 },
+    { label: 'Risk Matrix', path: '/threats/risk-matrix', icon: 'Grid3X3', category: 'CORE INTEL', order: 16.1 },
   ]},
   { category: 'PERSONNEL', items: [
     { label: 'Directory', path: '/personnel', icon: 'UserCheck', category: 'PERSONNEL', order: 20 },

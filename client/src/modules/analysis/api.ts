@@ -8,4 +8,5 @@ export const analysisApi = {
   importCsv: (csv: string) => api.post('/analysis/relationships/import', { csv }),
   getGraph: (params?: any) => api.get('/analysis/graph', { params }),
   getGraphStats: () => api.get('/analysis/graph/stats'),
+  getTimeline: () => api.get('/analysis/timeline'),
 };

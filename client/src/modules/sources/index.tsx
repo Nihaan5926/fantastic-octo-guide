@@ -2,11 +2,13 @@ import { lazy } from 'react';
 
 const SourcesList = lazy(() => import('./pages/SourcesList'));
 const SourcesDetail = lazy(() => import('./pages/SourcesDetail'));
+const ReliabilityMatrix = lazy(() => import('./pages/ReliabilityMatrix'));
 
 export default {
   name: 'sources',
   routes: [
     { path: '/sources', element: <SourcesList /> },
+    { path: '/sources/reliability-matrix', element: <ReliabilityMatrix /> },
     { path: '/sources/:id', element: <SourcesDetail /> },
   ],
   navItems: [

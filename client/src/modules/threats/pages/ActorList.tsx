@@ -11,7 +11,9 @@ import SearchBar from '../../../components/common/SearchBar';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Pencil, Trash2, Eye, Download, ChevronDown, ShieldAlert } from 'lucide-react';
+import BulkImport from '../../../components/common/BulkImport';
+import { Pencil, Trash2, Eye, Download, ChevronDown, ShieldAlert, Upload } from 'lucide-react';
+import type { Column } from '../../../components/common/BulkImport';
 
 const statusOptions = [
   { value: 'ACTIVE', label: 'Active' },
@@ -62,6 +64,25 @@ export default function ActorList() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const actorColumns: Column[] = [
+    { key: 'name', label: 'Name', required: true },
+    { key: 'description', label: 'Description' },
+    { key: 'motivation', label: 'Motivation' },
+    { key: 'aliases', label: 'Aliases' },
+    { key: 'sophistication', label: 'Sophistication' },
+    { key: 'status', label: 'Status' },
+  ];
+
+  const handleImportActors = async (rows: Record<string, any>[]) => {
+    const actors = rows.map((row) => ({
+      ...row,
+      aliases: row.aliases ? row.aliases.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+    }));
+    await threatsApi.importBulk({ actors });
+    fetchActors({ page: 1, search, status: statusFilter });
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -215,6 +236,9 @@ export default function ActorList() {
     <div>
       <PageHeader title="Threat Actors" subtitle="Manage threat actors" onCreate={openCreate} createLabel="New Actor">
         <div className="relative" ref={exportRef}>
+          <button onClick={() => setImportOpen(true)} className="btn-secondary flex items-center gap-2 text-sm mr-2">
+            <Upload size={16} /> Import
+          </button>
           <button
             onClick={() => setExportOpen(!exportOpen)}
             disabled={exporting}
@@ -283,6 +307,15 @@ export default function ActorList() {
         message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
         variant="danger"
         isLoading={isSubmitting}
+      />
+
+      <BulkImport
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        entityType="actor"
+        columns={actorColumns}
+        onImport={handleImportActors}
+        title="Import Threat Actors"
       />
     </div>
   );

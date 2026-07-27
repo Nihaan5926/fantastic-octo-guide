@@ -381,4 +381,123 @@ router.delete('/:id', auditLog('report:delete', 'report'), async (req: Request, 
   } catch (e) { next(e); }
 });
 
+// ── Intelligence Summary Generator ──
+
+router.post('/generate-summary', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { startDate, endDate } = req.body;
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+
+    const [highPriorityReports, threatActivity, recentIOCs, caseStatusChanges, newMissions, osintTasks, newSources, recentAlerts, recentSitreps] = await Promise.all([
+      db('intelligence_reports')
+        .select('*')
+        .where(function () {
+          this.where('priority', 'CRITICAL').orWhere('priority', 'HIGH');
+        })
+        .andWhere('created_at', '>=', start)
+        .andWhere('created_at', '<=', end)
+        .orderBy('created_at', 'desc')
+        .limit(5),
+
+      db('threat_actors')
+        .select('threat_actors.*')
+        .andWhere('updated_at', '>=', start)
+        .andWhere('updated_at', '<=', end)
+        .orderBy('updated_at', 'desc')
+        .limit(10),
+
+      db('indicators')
+        .select('indicators.*', 'threat_actors.name as actor_name')
+        .leftJoin('threat_actors', 'indicators.threat_actor_id', 'threat_actors.id')
+        .andWhere('indicators.created_at', '>=', start)
+        .andWhere('indicators.created_at', '<=', end)
+        .orderBy('indicators.created_at', 'desc')
+        .limit(15),
+
+      db('cases')
+        .select('*')
+        .andWhere('updated_at', '>=', start)
+        .andWhere('updated_at', '<=', end)
+        .orderBy('updated_at', 'desc')
+        .limit(10),
+
+      db('missions')
+        .select('*')
+        .andWhere('created_at', '>=', start)
+        .andWhere('created_at', '<=', end)
+        .orderBy('created_at', 'desc')
+        .limit(10),
+
+      db('osint_tasks')
+        .select('*')
+        .andWhere('created_at', '>=', start)
+        .andWhere('created_at', '<=', end)
+        .orderBy('created_at', 'desc')
+        .limit(10),
+
+      db('sources')
+        .select('*')
+        .andWhere('created_at', '>=', start)
+        .andWhere('created_at', '<=', end)
+        .orderBy('created_at', 'desc')
+        .limit(10),
+
+      db('alerts')
+        .select('*')
+        .andWhere('created_at', '>=', start)
+        .andWhere('created_at', '<=', end)
+        .orderBy('created_at', 'desc')
+        .limit(10),
+
+      db('sitreps')
+        .select('*')
+        .andWhere('created_at', '>=', start)
+        .andWhere('created_at', '<=', end)
+        .orderBy('created_at', 'desc')
+        .limit(10),
+    ]);
+
+    const criticalCount = highPriorityReports.filter((r: any) => r.priority === 'CRITICAL').length;
+    const highCount = highPriorityReports.filter((r: any) => r.priority === 'HIGH').length;
+
+    const alertHighCount = (recentAlerts || []).filter((a: any) => a.severity === 'HIGH' || a.severity === 'CRITICAL').length;
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      period: { start: start.toISOString(), end: end.toISOString() },
+      executiveSummary: {
+        criticalReports: criticalCount,
+        highPriorityReports: highCount,
+        recentActivity: highPriorityReports,
+      },
+      threatOverview: {
+        recentActors: threatActivity,
+        newIndicators: recentIOCs,
+        actorCount: threatActivity.length,
+        newIocCount: recentIOCs.length,
+      },
+      operationalUpdate: {
+        caseChanges: caseStatusChanges,
+        newMissions,
+        caseCount: caseStatusChanges.length,
+        missionCount: newMissions.length,
+      },
+      collectionStatus: {
+        osintTasks,
+        newSources,
+        tasksRun: osintTasks.length,
+        sourcesDiscovered: newSources.length,
+      },
+      watchCenter: {
+        recentAlerts: recentAlerts || [],
+        recentSitreps: recentSitreps || [],
+        totalAlerts: (recentAlerts || []).length,
+        highSeverityAlerts: alertHighCount,
+        totalSitreps: (recentSitreps || []).length,
+      },
+    });
+  } catch (e) { next(e); }
+});
+
 export default router;

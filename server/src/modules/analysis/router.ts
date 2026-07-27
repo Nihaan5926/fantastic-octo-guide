@@ -159,4 +159,87 @@ router.get('/graph/stats', async (req: Request, res: Response, next: NextFunctio
   } catch (e) { next(e); }
 });
 
+router.get('/timeline', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const queries = [
+      db('intelligence_reports').select(
+        db.raw("'report' as entity_type"),
+        'id as entity_id',
+        'title',
+        'summary as description',
+        'created_at'
+      ),
+      db('cases').select(
+        db.raw("'case' as entity_type"),
+        'id as entity_id',
+        'title',
+        'description',
+        'created_at'
+      ),
+      db('evidence').select(
+        db.raw("'evidence' as entity_type"),
+        'id as entity_id',
+        'title',
+        'description',
+        'created_at'
+      ),
+      db('sources').select(
+        db.raw("'source' as entity_type"),
+        'id as entity_id',
+        'code_name as title',
+        'description',
+        'created_at'
+      ),
+      db('threat_actors').select(
+        db.raw("'threat_actor' as entity_type"),
+        'id as entity_id',
+        'name as title',
+        'description',
+        'created_at'
+      ),
+      db('mission_plans').select(
+        db.raw("'mission_plan' as entity_type"),
+        'id as entity_id',
+        'title',
+        'objective as description',
+        'created_at'
+      ),
+      db('target_packages').select(
+        db.raw("'target_package' as entity_type"),
+        'id as entity_id',
+        'title',
+        'description',
+        'created_at'
+      ),
+      db('sitreps').select(
+        db.raw("'sitrep' as entity_type"),
+        'id as entity_id',
+        'title',
+        db.raw("NULL as description"),
+        'created_at'
+      ),
+      db('tasking_assignments').select(
+        db.raw("'tasking_assignment' as entity_type"),
+        'id as entity_id',
+        'title',
+        'description',
+        'created_at'
+      ),
+    ];
+
+    let unionQuery = queries[0];
+    for (let i = 1; i < queries.length; i++) {
+      unionQuery = unionQuery.unionAll(queries[i]);
+    }
+
+    const results = await db
+      .select('*')
+      .from(unionQuery.as('all_events'))
+      .orderBy('created_at', 'desc')
+      .limit(100);
+
+    res.json({ data: results });
+  } catch (e) { next(e); }
+});
+
 export default router;

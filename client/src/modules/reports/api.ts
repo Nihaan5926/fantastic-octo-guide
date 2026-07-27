@@ -20,4 +20,5 @@ export const reportsApi = {
     api.delete(`/reports/${id}/attachments/${attachmentId}`),
   getVersions: (id: string) => api.get(`/reports/${id}/versions`),
   getVersion: (id: string, vid: string) => api.get(`/reports/${id}/versions/${vid}`),
+  generateSummary: (params: { startDate: string; endDate: string }) => api.post('/reports/generate-summary', params),
 };

@@ -13,4 +13,5 @@ export const sourcesApi = {
     }),
   deleteAttachment: (id: string, attachmentId: string) =>
     api.delete(`/sources/${id}/attachments/${attachmentId}`),
+  reliabilityMatrix: () => api.get('/sources/reliability-matrix'),
 };
