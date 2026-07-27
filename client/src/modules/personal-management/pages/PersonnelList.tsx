@@ -269,7 +269,7 @@ export default function PersonnelList() {
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Edit Record' : 'Add Record'} size="lg">
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="User ID" value={form.user_id || ''} onChange={(e) => setField('user_id', e.target.value)} required />
+            <FormInput label="Linked User ID (optional)" value={form.user_id || ''} onChange={(e) => setField('user_id', e.target.value)} />
             <FormInput label="Date of Birth" type="date" value={form.date_of_birth || ''} onChange={(e) => setField('date_of_birth', e.target.value)} />
             <FormInput label="Nationality" value={form.nationality || ''} onChange={(e) => setField('nationality', e.target.value)} />
             <FormInput label="Position Title" value={form.position_title || ''} onChange={(e) => setField('position_title', e.target.value)} />

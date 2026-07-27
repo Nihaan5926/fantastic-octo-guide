@@ -3,7 +3,7 @@ import { Knex } from 'knex';
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('personnel_records', (t) => {
     t.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    t.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE').unique();
+    t.uuid('user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
     t.date('date_of_birth').nullable();
     t.string('nationality', 100).nullable();
     t.string('position_title', 200).nullable();
