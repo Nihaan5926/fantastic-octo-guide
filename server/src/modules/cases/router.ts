@@ -79,7 +79,10 @@ router.get('/:id/children', async (req: Request, res: Response, next: NextFuncti
       .where('cases.parent_case_id', req.params.id)
       .orderBy('cases.created_at', 'desc');
     res.json({ data: children });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.post('/:id/children', async (req: Request, res: Response, next: NextFunction) => {
@@ -100,7 +103,10 @@ router.post('/:id/children', async (req: Request, res: Response, next: NextFunct
       userId: req.user!.userId,
     });
     res.status(201).json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'Case hierarchy not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.post('/:id/members', async (req: Request, res: Response, next: NextFunction) => {

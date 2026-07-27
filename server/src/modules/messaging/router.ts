@@ -177,9 +177,8 @@ router.get('/messages/:id', async (req: Request, res: Response, next: NextFuncti
 
 router.post('/messages', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('secure_messages').insert({
-      id: uuid(), sender_id: req.user!.userId, ...req.body,
-    }).returning('*');
+    const payload: any = { id: uuid(), sender_id: req.user!.userId, ...req.body };
+    const [item] = await db('secure_messages').insert(payload).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'secure_message',
       entityId: item.id,
@@ -187,13 +186,34 @@ router.post('/messages', async (req: Request, res: Response, next: NextFunction)
       userId: req.user!.userId,
     });
     res.status(201).json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) {
+      try {
+        const { parent_id, ...rest } = req.body as any;
+        const payload = { id: uuid(), sender_id: req.user!.userId, ...rest };
+        const [item] = await db('secure_messages').insert(payload).returning('*');
+        eventBus.emit('entity:created', {
+          entityType: 'secure_message',
+          entityId: item.id,
+          title: item.subject || 'New message',
+          userId: req.user!.userId,
+        });
+        res.status(201).json(item);
+        return;
+      } catch (innerE: any) {
+        next(innerE);
+      }
+    }
+    next(e);
+  }
 });
 
 router.put('/messages/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const updateData: any = { ...req.body };
+    delete updateData.parent_id;
     const [item] = await db('secure_messages').where({ id: req.params.id })
-      .update({ ...req.body }).returning('*');
+      .update(updateData).returning('*');
     if (!item) { res.status(404).json({ error: 'Message not found' }); return; }
     eventBus.emit('entity:updated', {
       entityType: 'secure_message',

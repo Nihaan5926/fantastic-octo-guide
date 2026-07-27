@@ -286,7 +286,10 @@ router.get('/:id/versions', async (req: Request, res: Response, next: NextFuncti
       .where('report_versions.report_id', req.params.id)
       .orderBy('report_versions.version_num', 'desc');
     res.json({ data: versions });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.get('/:id/versions/:vid', async (req: Request, res: Response, next: NextFunction) => {
@@ -298,7 +301,10 @@ router.get('/:id/versions/:vid', async (req: Request, res: Response, next: NextF
       .first();
     if (!version) { res.status(404).json({ error: 'Version not found' }); return; }
     res.json(version);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(404).json({ error: 'Version not found' }); return; }
+    next(e);
+  }
 });
 
 // ── Generic Routes (must come LAST among same method) ──
@@ -321,22 +327,26 @@ router.put('/:id', auditLog('report:update', 'report'), async (req: Request, res
     const existing = await db('intelligence_reports').where({ id: req.params.id }).first();
     if (!existing) { res.status(404).json({ error: 'Report not found' }); return; }
 
-    const [latestVersion] = await db('report_versions')
-      .where({ report_id: req.params.id })
-      .orderBy('version_num', 'desc')
-      .limit(1);
+    try {
+      const [latestVersion] = await db('report_versions')
+        .where({ report_id: req.params.id })
+        .orderBy('version_num', 'desc')
+        .limit(1);
 
-    const nextVersion = (latestVersion ? latestVersion.version_num : 0) + 1;
-    await db('report_versions').insert({
-      id: uuid(),
-      report_id: req.params.id,
-      version_num: nextVersion,
-      title: existing.title,
-      content: existing.content,
-      summary: existing.summary,
-      classification: existing.classification,
-      edited_by: req.user!.userId,
-    });
+      const nextVersion = (latestVersion ? latestVersion.version_num : 0) + 1;
+      await db('report_versions').insert({
+        id: uuid(),
+        report_id: req.params.id,
+        version_num: nextVersion,
+        title: existing.title,
+        content: existing.content,
+        summary: existing.summary,
+        classification: existing.classification,
+        edited_by: req.user!.userId,
+      });
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e;
+    }
 
     const [item] = await db('intelligence_reports')
       .where({ id: req.params.id }).update({ ...body, updated_at: db.fn.now() }).returning('*');

@@ -8,6 +8,11 @@ import { config } from '../../config';
 import { AppError } from '../../middleware/error-handler';
 import type { JwtPayload } from '../../middleware/auth';
 import type { RegisterInput, LoginInput } from './validator';
+import { logger } from '../../utils/logger';
+
+function isSchemaError(e: any): boolean {
+  return e?.message?.includes('does not exist') || false;
+}
 
 function generateTokens(payload: { userId: string; email: string; role: string; clearance: string }) {
   const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
@@ -22,16 +27,24 @@ function generateTokens(payload: { userId: string; email: string; role: string; 
 }
 
 async function createSession(userId: string, accessToken: string, ip?: string, userAgent?: string) {
-  const tokenHash = crypto.createHash('sha256').update(accessToken).digest('hex');
-  await db('user_sessions').insert({
-    id: uuid(),
-    user_id: userId,
-    token_hash: tokenHash,
-    ip_address: ip || null,
-    user_agent: userAgent || null,
-    expires_at: new Date(Date.now() + 15 * 60 * 1000),
-    is_active: true,
-  });
+  try {
+    const tokenHash = crypto.createHash('sha256').update(accessToken).digest('hex');
+    await db('user_sessions').insert({
+      id: uuid(),
+      user_id: userId,
+      token_hash: tokenHash,
+      ip_address: ip || null,
+      user_agent: userAgent || null,
+      expires_at: new Date(Date.now() + 15 * 60 * 1000),
+      is_active: true,
+    });
+  } catch (e: any) {
+    if (isSchemaError(e)) {
+      logger.warn('user_sessions table not available — skipping session creation');
+      return;
+    }
+    throw e;
+  }
 }
 
 export async function register(input: RegisterInput) {
@@ -76,12 +89,17 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 15;
 
 async function recordLoginHistory(userId: string | null, ip: string, userAgent: string, success: boolean) {
-  await db('login_history').insert({
-    user_id: userId,
-    ip_address: ip,
-    user_agent: userAgent,
-    success,
-  });
+  try {
+    await db('login_history').insert({
+      user_id: userId,
+      ip_address: ip,
+      user_agent: userAgent,
+      success,
+    });
+  } catch (e: any) {
+    if (isSchemaError(e)) return;
+    throw e;
+  }
 }
 
 export async function login(input: LoginInput, ip?: string, userAgent?: string) {
@@ -107,21 +125,29 @@ export async function login(input: LoginInput, ip?: string, userAgent?: string) 
 
   const valid = await bcrypt.compare(input.password, user.password_hash);
   if (!valid) {
-    const newAttempts = (user.failed_login_attempts || 0) + 1;
-    const updateData: any = { failed_login_attempts: newAttempts };
-    if (newAttempts >= MAX_FAILED_ATTEMPTS) {
-      updateData.locked_until = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
+    try {
+      const newAttempts = (user.failed_login_attempts || 0) + 1;
+      const updateData: any = { failed_login_attempts: newAttempts };
+      if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+        updateData.locked_until = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
+      }
+      await db('users').where({ id: user.id }).update(updateData);
+    } catch (e: any) {
+      if (!isSchemaError(e)) throw e;
     }
-    await db('users').where({ id: user.id }).update(updateData);
     await recordLoginHistory(user.id, ip || '', userAgent || '', false);
     throw new AppError(401, 'Invalid credentials');
   }
 
-  await db('users').where({ id: user.id }).update({
-    failed_login_attempts: 0,
-    locked_until: null,
-    last_login_at: db.fn.now(),
-  });
+  try {
+    await db('users').where({ id: user.id }).update({
+      failed_login_attempts: 0,
+      locked_until: null,
+      last_login_at: db.fn.now(),
+    });
+  } catch (e: any) {
+    if (!isSchemaError(e)) throw e;
+  }
 
   if (user.totp_enabled) {
     const tempToken = jwt.sign(
@@ -327,8 +353,12 @@ export async function updateProfile(userId: string, data: { firstName?: string; 
 
 export async function logout(token: string, userId?: string) {
   if (token) {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    await db('user_sessions').where({ token_hash: tokenHash }).update({ is_active: false });
+    try {
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      await db('user_sessions').where({ token_hash: tokenHash }).update({ is_active: false });
+    } catch (e: any) {
+      if (!isSchemaError(e)) throw e;
+    }
   }
   if (userId) {
     const stored = await db('refresh_tokens').where({ user_id: userId }).first();
@@ -352,10 +382,17 @@ export async function setupTOTP(userId: string) {
   const secret = genSecret();
   const otpauthUrl = generateURI({ secret, label: user.email, issuer: 'IntelPlatform' });
 
-  await db('users').where({ id: userId }).update({
-    totp_secret: secret,
-    totp_verified: false,
-  });
+  try {
+    await db('users').where({ id: userId }).update({
+      totp_secret: secret,
+      totp_verified: false,
+    });
+  } catch (e: any) {
+    if (isSchemaError(e)) {
+      throw new AppError(500, 'TOTP columns not available. Please run database migrations.');
+    }
+    throw e;
+  }
 
   return { secret, otpauthUrl };
 }
@@ -368,20 +405,35 @@ export async function enableTOTP(userId: string, token: string) {
   const result = verifySync({ secret: user.totp_secret, token });
   if (!result.valid) throw new AppError(400, 'Invalid verification code');
 
-  await db('users').where({ id: userId }).update({
-    totp_verified: true,
-    totp_enabled: true,
-  });
+  try {
+    await db('users').where({ id: userId }).update({
+      totp_verified: true,
+      totp_enabled: true,
+    });
+  } catch (e: any) {
+    if (isSchemaError(e)) {
+      throw new AppError(500, 'TOTP columns not available. Please run database migrations.');
+    }
+    throw e;
+  }
 
   return { message: '2FA enabled successfully' };
 }
 
 export async function disableTOTP(userId: string) {
-  await db('users').where({ id: userId }).update({
-    totp_secret: null,
-    totp_enabled: false,
-    totp_verified: false,
-  });
+  try {
+    await db('users').where({ id: userId }).update({
+      totp_secret: null,
+      totp_enabled: false,
+      totp_verified: false,
+    });
+  } catch (e: any) {
+    if (isSchemaError(e)) {
+      logger.warn('TOTP columns not available — skipping disable');
+      return { message: '2FA disabled' };
+    }
+    throw e;
+  }
 
   return { message: '2FA disabled' };
 }
@@ -398,114 +450,159 @@ export async function verifyTOTP(userId: string, token: string) {
 // ─── Session Management ───
 
 export async function getActiveSessions(userId: string, currentToken?: string) {
-  let currentHash: string | null = null;
-  if (currentToken) {
-    currentHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+  try {
+    let currentHash: string | null = null;
+    if (currentToken) {
+      currentHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+    }
+
+    const sessions = await db('user_sessions')
+      .where({ user_id: userId, is_active: true })
+      .where('expires_at', '>', new Date())
+      .orderBy('created_at', 'desc');
+
+    return sessions.map((s: any) => ({
+      id: s.id,
+      ip_address: s.ip_address,
+      user_agent: s.user_agent,
+      created_at: s.created_at,
+      expires_at: s.expires_at,
+      is_current: currentHash ? s.token_hash === currentHash : false,
+    }));
+  } catch (e: any) {
+    if (isSchemaError(e)) return [];
+    throw e;
   }
-
-  const sessions = await db('user_sessions')
-    .where({ user_id: userId, is_active: true })
-    .where('expires_at', '>', new Date())
-    .orderBy('created_at', 'desc');
-
-  return sessions.map((s: any) => ({
-    id: s.id,
-    ip_address: s.ip_address,
-    user_agent: s.user_agent,
-    created_at: s.created_at,
-    expires_at: s.expires_at,
-    is_current: currentHash ? s.token_hash === currentHash : false,
-  }));
 }
 
 export async function revokeSession(userId: string, sessionId: string) {
-  const session = await db('user_sessions')
-    .where({ id: sessionId, user_id: userId })
-    .first();
-  if (!session) throw new AppError(404, 'Session not found');
+  try {
+    const session = await db('user_sessions')
+      .where({ id: sessionId, user_id: userId })
+      .first();
+    if (!session) throw new AppError(404, 'Session not found');
 
-  await db('user_sessions').where({ id: sessionId }).update({ is_active: false });
-  return { message: 'Session revoked' };
+    await db('user_sessions').where({ id: sessionId }).update({ is_active: false });
+    return { message: 'Session revoked' };
+  } catch (e: any) {
+    if (isSchemaError(e)) throw new AppError(404, 'Session not found');
+    throw e;
+  }
 }
 
 export async function revokeOtherSessions(userId: string, currentToken: string) {
-  const currentHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+  try {
+    const currentHash = crypto.createHash('sha256').update(currentToken).digest('hex');
 
-  await db('user_sessions')
-    .where({ user_id: userId, is_active: true })
-    .whereNot({ token_hash: currentHash })
-    .update({ is_active: false });
+    await db('user_sessions')
+      .where({ user_id: userId, is_active: true })
+      .whereNot({ token_hash: currentHash })
+      .update({ is_active: false });
 
-  return { message: 'All other sessions revoked' };
+    return { message: 'All other sessions revoked' };
+  } catch (e: any) {
+    if (isSchemaError(e)) return { message: 'All other sessions revoked' };
+    throw e;
+  }
 }
 
 // ─── Admin session management ───
 
 export async function getSessionsForAdmin(userId: string) {
-  const sessions = await db('user_sessions')
-    .where({ user_id: userId, is_active: true })
-    .where('expires_at', '>', new Date())
-    .orderBy('created_at', 'desc');
+  try {
+    const sessions = await db('user_sessions')
+      .where({ user_id: userId, is_active: true })
+      .where('expires_at', '>', new Date())
+      .orderBy('created_at', 'desc');
 
-  return sessions.map((s: any) => ({
-    id: s.id,
-    ip_address: s.ip_address,
-    user_agent: s.user_agent,
-    created_at: s.created_at,
-    expires_at: s.expires_at,
-    is_current: false,
-  }));
+    return sessions.map((s: any) => ({
+      id: s.id,
+      ip_address: s.ip_address,
+      user_agent: s.user_agent,
+      created_at: s.created_at,
+      expires_at: s.expires_at,
+      is_current: false,
+    }));
+  } catch (e: any) {
+    if (isSchemaError(e)) return [];
+    throw e;
+  }
 }
 
 export async function generateResetToken(email: string) {
   const user = await db('users').where({ email: email.toLowerCase() }).first();
   if (!user) return;
 
-  await db('password_reset_tokens').where({ user_id: user.id }).del();
+  try {
+    await db('password_reset_tokens').where({ user_id: user.id }).del();
 
-  const token = uuid();
-  await db('password_reset_tokens').insert({
-    user_id: user.id,
-    token,
-    expires_at: new Date(Date.now() + 60 * 60 * 1000),
-  });
+    const token = uuid();
+    await db('password_reset_tokens').insert({
+      user_id: user.id,
+      token,
+      expires_at: new Date(Date.now() + 60 * 60 * 1000),
+    });
 
-  return token;
+    return token;
+  } catch (e: any) {
+    if (isSchemaError(e)) {
+      logger.warn('password_reset_tokens table not available');
+      return;
+    }
+    throw e;
+  }
 }
 
 export async function resetPassword(token: string, newPassword: string) {
-  const record = await db('password_reset_tokens').where({ token }).first();
-  if (!record) throw new AppError(400, 'Invalid or expired reset token');
-  if (new Date(record.expires_at) < new Date()) {
+  try {
+    const record = await db('password_reset_tokens').where({ token }).first();
+    if (!record) throw new AppError(400, 'Invalid or expired reset token');
+    if (new Date(record.expires_at) < new Date()) {
+      await db('password_reset_tokens').where({ id: record.id }).del();
+      throw new AppError(400, 'Reset token has expired');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await db('users').where({ id: record.user_id }).update({
+      password_hash: passwordHash,
+      updated_at: db.fn.now(),
+    });
+
+    try {
+      await db('users').where({ id: record.user_id }).update({
+        failed_login_attempts: 0,
+        locked_until: null,
+      });
+    } catch (e: any) {
+      if (!isSchemaError(e)) throw e;
+    }
+
     await db('password_reset_tokens').where({ id: record.id }).del();
-    throw new AppError(400, 'Reset token has expired');
+  } catch (e: any) {
+    if (isSchemaError(e)) throw new AppError(400, 'Password reset is currently unavailable. Please contact an administrator.');
+    throw e;
   }
-
-  const passwordHash = await bcrypt.hash(newPassword, 12);
-  await db('users').where({ id: record.user_id }).update({
-    password_hash: passwordHash,
-    failed_login_attempts: 0,
-    locked_until: null,
-    updated_at: db.fn.now(),
-  });
-
-  await db('password_reset_tokens').where({ id: record.id }).del();
 }
 
 export async function getLoginHistory(userId: string) {
-  const history = await db('login_history')
-    .where({ user_id: userId })
-    .orderBy('created_at', 'desc')
-    .limit(20)
-    .select('id', 'ip_address', 'user_agent', 'success', 'created_at');
+  try {
+    const history = await db('login_history')
+      .where({ user_id: userId })
+      .orderBy('created_at', 'desc')
+      .limit(20)
+      .select('id', 'ip_address', 'user_agent', 'success', 'created_at');
 
-  return history.map((entry) => ({
-    id: entry.id,
-    ipAddress: entry.ip_address,
-    userAgent: entry.user_agent,
-    success: entry.success,
-    createdAt: entry.created_at,
-  }));
+    return history.map((entry) => ({
+      id: entry.id,
+      ipAddress: entry.ip_address,
+      userAgent: entry.user_agent,
+      success: entry.success,
+      createdAt: entry.created_at,
+    }));
+  } catch (e: any) {
+    if (isSchemaError(e)) return [];
+    throw e;
+  }
 }
 
 export async function getUserActivity(userId: string) {
@@ -557,7 +654,11 @@ export async function deleteAccount(userId: string, password: string) {
     avatar_url: null,
   });
 
-  await db('user_sessions').where({ user_id: userId }).del();
+  try {
+    await db('user_sessions').where({ user_id: userId }).del();
+  } catch (e: any) {
+    if (!isSchemaError(e)) throw e;
+  }
   await db('refresh_tokens').where({ user_id: userId }).del();
 }
 

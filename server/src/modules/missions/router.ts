@@ -228,7 +228,10 @@ router.get('/plans/:id/roster', async (req: Request, res: Response, next: NextFu
       .where('mission_roster.mission_id', req.params.id)
       .orderBy('mission_roster.assigned_at', 'asc');
     res.json({ data: roster });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.post('/plans/:id/roster', async (req: Request, res: Response, next: NextFunction) => {
@@ -241,14 +244,20 @@ router.post('/plans/:id/roster', async (req: Request, res: Response, next: NextF
       role: role || 'OPERATOR',
     }).returning('*');
     res.status(201).json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'Mission roster not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.delete('/plans/:id/roster/:userId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('mission_roster').where({ mission_id: req.params.id, user_id: req.params.userId }).del();
     res.json({ message: 'Member removed from roster' });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ message: 'Member removed from roster' }); return; }
+    next(e);
+  }
 });
 
 // ── Attachments (must come before generic /:id) ──

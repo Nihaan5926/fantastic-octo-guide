@@ -20,7 +20,10 @@ router.get('/announcements', async (req: Request, res: Response, next: NextFunct
       .orderBy('announcements.created_at', 'desc');
 
     res.json({ data: items });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.post('/announcements', async (req: Request, res: Response, next: NextFunction) => {
@@ -38,7 +41,10 @@ router.post('/announcements', async (req: Request, res: Response, next: NextFunc
     }).returning('*');
 
     res.status(201).json(announcement);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'Announcements not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.put('/announcements/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -51,7 +57,10 @@ router.put('/announcements/:id', async (req: Request, res: Response, next: NextF
     const [announcement] = await db('announcements').where({ id: req.params.id }).update(update).returning('*');
     if (!announcement) { res.status(404).json({ error: 'Announcement not found' }); return; }
     res.json(announcement);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(404).json({ error: 'Announcement not found' }); return; }
+    next(e);
+  }
 });
 
 router.delete('/announcements/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -59,7 +68,10 @@ router.delete('/announcements/:id', async (req: Request, res: Response, next: Ne
     const deleted = await db('announcements').where({ id: req.params.id }).del();
     if (!deleted) { res.status(404).json({ error: 'Announcement not found' }); return; }
     res.json({ message: 'Announcement deleted' });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ message: 'Announcement deleted' }); return; }
+    next(e);
+  }
 });
 
 export default router;

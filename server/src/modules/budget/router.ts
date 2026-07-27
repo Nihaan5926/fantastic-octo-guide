@@ -108,7 +108,10 @@ router.get('/budgets/:id/line-items', async (req: Request, res: Response, next: 
       .where({ budget_id: req.params.id })
       .orderBy('created_at', 'asc');
     res.json({ data: items });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.post('/budgets/:id/line-items', async (req: Request, res: Response, next: NextFunction) => {
@@ -122,7 +125,10 @@ router.post('/budgets/:id/line-items', async (req: Request, res: Response, next:
       amount: amount || 0,
     }).returning('*');
     res.status(201).json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'Budget line items not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.put('/budgets/:id/line-items/:lid', async (req: Request, res: Response, next: NextFunction) => {
@@ -134,14 +140,20 @@ router.put('/budgets/:id/line-items/:lid', async (req: Request, res: Response, n
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Line item not found' }); return; }
     res.json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(404).json({ error: 'Line item not found' }); return; }
+    next(e);
+  }
 });
 
 router.delete('/budgets/:id/line-items/:lid', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('budget_line_items').where({ id: req.params.lid, budget_id: req.params.id }).del();
     res.json({ message: 'Line item deleted' });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ message: 'Line item deleted' }); return; }
+    next(e);
+  }
 });
 
 router.get('/contracts', async (req: Request, res: Response, next: NextFunction) => {

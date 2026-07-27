@@ -19,7 +19,10 @@ router.get('/api-keys', async (req: Request, res: Response, next: NextFunction) 
 
     const keys = await query.orderBy('created_at', 'desc');
     res.json({ data: keys });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.post('/api-keys', async (req: Request, res: Response, next: NextFunction) => {
@@ -39,7 +42,10 @@ router.post('/api-keys', async (req: Request, res: Response, next: NextFunction)
     });
 
     res.status(201).json({ key: rawKey, name: name || 'API Key', scopes: scopes || [] });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'API keys not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.delete('/api-keys/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -52,7 +58,10 @@ router.delete('/api-keys/:id', async (req: Request, res: Response, next: NextFun
     const deleted = await query.del();
     if (!deleted) { res.status(404).json({ error: 'API key not found' }); return; }
     res.json({ message: 'API key revoked' });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(404).json({ error: 'API key not found' }); return; }
+    next(e);
+  }
 });
 
 export default router;

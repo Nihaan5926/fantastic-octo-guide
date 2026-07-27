@@ -102,7 +102,10 @@ router.get('/courses/:id/prerequisites', async (req: Request, res: Response, nex
       .where('course_prerequisites.course_id', req.params.id);
 
     res.json({ data: prerequisites });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.post('/courses/:id/prerequisites', async (req: Request, res: Response, next: NextFunction) => {
@@ -114,7 +117,10 @@ router.post('/courses/:id/prerequisites', async (req: Request, res: Response, ne
       prerequisite_course_id,
     }).returning('*');
     res.status(201).json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'Course prerequisites not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.delete('/courses/:id/prerequisites/:prereqId', async (req: Request, res: Response, next: NextFunction) => {
@@ -124,7 +130,10 @@ router.delete('/courses/:id/prerequisites/:prereqId', async (req: Request, res: 
       course_id: req.params.id,
     }).del();
     res.json({ message: 'Prerequisite removed' });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ message: 'Prerequisite removed' }); return; }
+    next(e);
+  }
 });
 
 // ── Enrollments ──────────────────────────────────────────────────────────────

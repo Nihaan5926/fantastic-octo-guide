@@ -17,7 +17,10 @@ router.get('/rules', async (req: Request, res: Response, next: NextFunction) => 
       .where('log_type', 'ESCALATION_RULE')
       .orWhereRaw("metadata->>'type' = 'escalation_rule'");
     res.json({ data: rules.map((r: any) => typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata).filter(Boolean) });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [] }); return; }
+    next(e);
+  }
 });
 
 router.post('/rules', async (req: Request, res: Response, next: NextFunction) => {
@@ -44,7 +47,10 @@ router.post('/rules', async (req: Request, res: Response, next: NextFunction) =>
     });
 
     res.status(201).json(metadata);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'Escalation rules not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.delete('/rules/:ruleId', async (req: Request, res: Response, next: NextFunction) => {
@@ -55,7 +61,10 @@ router.delete('/rules/:ruleId', async (req: Request, res: Response, next: NextFu
       .del();
     if (!deleted) { res.status(404).json({ error: 'Rule not found' }); return; }
     res.json({ message: 'Escalation rule deleted' });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(404).json({ error: 'Rule not found' }); return; }
+    next(e);
+  }
 });
 
 // ── Shift Schedules ──────────────────────────────────────────────────────────

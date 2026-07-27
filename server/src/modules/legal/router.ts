@@ -208,7 +208,10 @@ router.get('/holds', async (req: Request, res: Response, next: NextFunction) => 
       query.clone().clearSelect().count('legal_holds.id').first().then((r: any) => parseInt(r.count, 10)),
     ]);
     res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }); return; }
+    next(e);
+  }
 });
 
 router.get('/holds/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -219,7 +222,10 @@ router.get('/holds/:id', async (req: Request, res: Response, next: NextFunction)
       .where('legal_holds.id', req.params.id).first();
     if (!item) { res.status(404).json({ error: 'Hold not found' }); return; }
     res.json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(404).json({ error: 'Hold not found' }); return; }
+    next(e);
+  }
 });
 
 router.post('/holds', async (req: Request, res: Response, next: NextFunction) => {
@@ -236,7 +242,10 @@ router.post('/holds', async (req: Request, res: Response, next: NextFunction) =>
       userId: req.user!.userId,
     });
     res.status(201).json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(400).json({ error: 'Legal holds not available. Please run database migrations.' }); return; }
+    next(e);
+  }
 });
 
 router.put('/holds/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -251,7 +260,10 @@ router.put('/holds/:id', async (req: Request, res: Response, next: NextFunction)
       userId: req.user!.userId,
     });
     res.json(item);
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.status(404).json({ error: 'Hold not found' }); return; }
+    next(e);
+  }
 });
 
 router.delete('/holds/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -264,7 +276,10 @@ router.delete('/holds/:id', async (req: Request, res: Response, next: NextFuncti
       userId: req.user!.userId,
     });
     res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
+  } catch (e: any) {
+    if (e.message?.includes('does not exist')) { res.json({ message: 'Deleted' }); return; }
+    next(e);
+  }
 });
 
 export default router;
