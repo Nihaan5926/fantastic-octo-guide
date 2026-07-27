@@ -105,7 +105,7 @@ router.get('/shifts/:id', async (req: Request, res: Response, next: NextFunction
 
 router.post('/shifts', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('shift_schedules').insert({ id: uuid(), ...req.body }).returning('*');
+    const [item] = await db('shift_schedules').insert({ id: uuid(), user_id: req.user!.userId, ...req.body }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'shift_schedule',
       entityId: item.id,

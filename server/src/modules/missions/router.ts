@@ -60,6 +60,7 @@ router.post('/plans', auditLog('mission:create', 'mission_plan'), async (req: Re
     const [item] = await db('mission_plans').insert({
       id: uuid(),
       reference_number: ref,
+      commander_id: req.user!.userId,
       ...req.body,
     }).returning('*');
     eventBus.emit('entity:created', {

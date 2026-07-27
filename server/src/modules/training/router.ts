@@ -170,7 +170,7 @@ router.get('/enrollments', async (req: Request, res: Response, next: NextFunctio
 router.post('/enrollments', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('training_enrollments').insert({
-      id: uuid(), ...req.body,
+      id: uuid(), user_id: req.user!.userId, ...req.body,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'training_enrollment',

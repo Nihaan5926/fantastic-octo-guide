@@ -66,6 +66,7 @@ router.post('/assignments', async (req: Request, res: Response, next: NextFuncti
       id: uuid(),
       reference_number: ref,
       assigned_by: req.user!.userId,
+      assigned_to: req.user!.userId,
       ...req.body,
     }).returning('*');
     eventBus.emit('entity:created', {
