@@ -34,8 +34,20 @@ echo "[Startup] Starting server in background..."
 node dist/app.js &
 SERVER_PID=$!
 
+# Check if process crashed immediately
+sleep 3
+if ! kill -0 $SERVER_PID 2>/dev/null; then
+  echo "[Startup] SERVER CRASHED ON STARTUP! Check logs above for errors."
+  exit 1
+fi
+
 echo "[Startup] Waiting for server to be ready..."
 for i in $(seq 1 30); do
+  # Check if process is still alive
+  if ! kill -0 $SERVER_PID 2>/dev/null; then
+    echo "[Startup] Server process died during startup!"
+    exit 1
+  fi
   if node -e "const http=require('http');http.get('http://localhost:${PORT:-4000}/api/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1));" 2>/dev/null; then
     echo "[Startup] Server is ready."
     break
