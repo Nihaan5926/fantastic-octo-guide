@@ -9,4 +9,5 @@ export const osintApi = {
   run: (id: string) => api.post(`/osint/tasks/${id}/run`),
   getResults: (id: string, params?: any) => api.get(`/osint/tasks/${id}/results`, { params }),
   schedule: (id: string, schedule: string, enabled?: boolean) => api.put(`/osint/tasks/${id}/schedule`, { schedule, enabled }),
+  exportResults: (id: string, format?: string) => api.get(`/osint/tasks/${id}/results/export`, { params: { format } }),
 };

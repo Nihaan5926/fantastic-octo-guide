@@ -111,21 +111,13 @@ export default function TaskDetail() {
   }, [results]);
 
   const handleExportCSV = () => {
-    const allResults = results || [];
-    if (allResults.length === 0) { toast.error('No results to export'); return; }
-    const headers = ['title', 'url', 'source_type', 'relevance_score', 'captured_at'];
-    const csvRows = [headers.map((h) => `"${h}"`).join(',')];
-    allResults.forEach((r: any) => {
-      csvRows.push(headers.map((h) => `"${String(r[h] || '').replace(/"/g, '""')}"`).join(','));
-    });
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
+    if (!id) return;
+    const token = localStorage.getItem('accessToken');
     const a = document.createElement('a');
-    a.href = url;
+    a.href = `/api/osint/tasks/${id}/results/export?format=csv`;
     a.download = `osint-results-${id}.csv`;
     a.click();
-    URL.revokeObjectURL(url);
-    toast.success('CSV exported');
+    toast.success('CSV export started');
   };
 
   const resultColumns = [

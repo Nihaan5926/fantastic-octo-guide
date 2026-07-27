@@ -100,6 +100,50 @@ router.delete('/budgets/:id', async (req: Request, res: Response, next: NextFunc
   } catch (e) { next(e); }
 });
 
+// ── Line Items ───────────────────────────────────────────────────────────────
+
+router.get('/budgets/:id/line-items', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const items = await db('budget_line_items')
+      .where({ budget_id: req.params.id })
+      .orderBy('created_at', 'asc');
+    res.json({ data: items });
+  } catch (e) { next(e); }
+});
+
+router.post('/budgets/:id/line-items', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { description, category, amount } = req.body;
+    const [item] = await db('budget_line_items').insert({
+      id: uuid(),
+      budget_id: req.params.id,
+      description,
+      category,
+      amount: amount || 0,
+    }).returning('*');
+    res.status(201).json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/budgets/:id/line-items/:lid', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { description, category, amount } = req.body;
+    const [item] = await db('budget_line_items')
+      .where({ id: req.params.lid, budget_id: req.params.id })
+      .update({ description, category, amount })
+      .returning('*');
+    if (!item) { res.status(404).json({ error: 'Line item not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/budgets/:id/line-items/:lid', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('budget_line_items').where({ id: req.params.lid, budget_id: req.params.id }).del();
+    res.json({ message: 'Line item deleted' });
+  } catch (e) { next(e); }
+});
+
 router.get('/contracts', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;

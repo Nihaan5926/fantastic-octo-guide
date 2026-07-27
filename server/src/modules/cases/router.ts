@@ -71,6 +71,38 @@ router.post('/', auditLog('case:create', 'case'), async (req: Request, res: Resp
 
 // ── Sub-Routes (must come before generic /:id) ──
 
+router.get('/:id/children', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const children = await db('cases')
+      .select('cases.*', 'users.first_name as lead_first', 'users.last_name as lead_last')
+      .leftJoin('users', 'cases.lead_analyst_id', 'users.id')
+      .where('cases.parent_case_id', req.params.id)
+      .orderBy('cases.created_at', 'desc');
+    res.json({ data: children });
+  } catch (e) { next(e); }
+});
+
+router.post('/:id/children', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = sanitizeInput(req.body);
+    const parent = await db('cases').where({ id: req.params.id }).first();
+    if (!parent) { res.status(404).json({ error: 'Parent case not found' }); return; }
+    const ref = `CASE-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(4, '0')}`;
+    const [item] = await db('cases').insert({
+      id: uuid(), reference_number: ref, parent_case_id: req.params.id,
+      lead_analyst_id: req.user!.userId, ...body,
+    }).returning('*');
+    logger.info(`Sub-case created: ${item.title || ref} under ${parent.title || parent.reference_number}`, { caseId: item.id, parentId: req.params.id });
+    eventBus.emit('entity:created', {
+      entityType: 'case',
+      entityId: item.id,
+      title: item.title || ref,
+      userId: req.user!.userId,
+    });
+    res.status(201).json(item);
+  } catch (e) { next(e); }
+});
+
 router.post('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, role } = req.body;

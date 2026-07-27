@@ -189,4 +189,82 @@ router.delete('/compliance/:id', async (req: Request, res: Response, next: NextF
   } catch (e) { next(e); }
 });
 
+// ── Legal Holds ──────────────────────────────────────────────────────────────
+
+router.get('/holds', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
+    const { status } = req.query;
+
+    let query = db('legal_holds')
+      .select('legal_holds.*', 'users.first_name as creator_first', 'users.last_name as creator_last')
+      .leftJoin('users', 'legal_holds.created_by', 'users.id');
+    if (status) query = query.where('legal_holds.status', status);
+
+    const [items, total] = await Promise.all([
+      query.clone().orderBy('legal_holds.placed_at', 'desc').limit(limit).offset(offset),
+      query.clone().clearSelect().count('legal_holds.id').first().then((r: any) => parseInt(r.count, 10)),
+    ]);
+    res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (e) { next(e); }
+});
+
+router.get('/holds/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('legal_holds')
+      .select('legal_holds.*', 'users.first_name as creator_first', 'users.last_name as creator_last')
+      .leftJoin('users', 'legal_holds.created_by', 'users.id')
+      .where('legal_holds.id', req.params.id).first();
+    if (!item) { res.status(404).json({ error: 'Hold not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.post('/holds', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('legal_holds').insert({
+      id: uuid(),
+      created_by: req.user!.userId,
+      ...req.body,
+    }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'legal_hold',
+      entityId: item.id,
+      title: item.title || 'New legal hold',
+      userId: req.user!.userId,
+    });
+    res.status(201).json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/holds/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('legal_holds').where({ id: req.params.id })
+      .update({ ...req.body }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Hold not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'legal_hold',
+      entityId: item.id,
+      title: item.title || 'Updated legal hold',
+      userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/holds/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('legal_holds').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'legal_hold',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
 export default router;

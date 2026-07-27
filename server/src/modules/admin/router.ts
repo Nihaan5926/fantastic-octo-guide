@@ -2,12 +2,34 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import { db } from '../../db/knex';
+import { config } from '../../config';
 import { authenticate } from '../../middleware/auth';
 import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
+import announcementRouter from './announcement-routes';
+import apiKeyRouter from './api-key-routes';
 
 const router = Router();
 router.use(authenticate);
+router.use(announcementRouter);
+router.use(apiKeyRouter);
+
+// Log buffer
+const logBuffer: string[] = [];
+const MAX_LOG_LINES = 500;
+const originalConsoleLog = console.log;
+const originalConsoleWarn = console.warn;
+const originalConsoleError = console.error;
+
+function addToBuffer(level: string, ...args: any[]) {
+  const line = `[${new Date().toISOString()}] [${level}] ${args.map((a) => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')}`;
+  logBuffer.push(line);
+  if (logBuffer.length > MAX_LOG_LINES) logBuffer.shift();
+}
+
+console.log = (...args: any[]) => { addToBuffer('INFO', ...args); originalConsoleLog.apply(console, args); };
+console.warn = (...args: any[]) => { addToBuffer('WARN', ...args); originalConsoleWarn.apply(console, args); };
+console.error = (...args: any[]) => { addToBuffer('ERROR', ...args); originalConsoleError.apply(console, args); };
 
 // ─── USERS ───
 
@@ -134,6 +156,21 @@ router.delete('/users/:id', auditLog('user:deactivate', 'user'), async (req: Req
       userId: req.user!.userId,
     });
     res.json({ message: 'User deactivated' });
+  } catch (e) { next(e); }
+});
+
+router.post('/users/:id/reactivate', auditLog('user:reactivate', 'user'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [user] = await db('users').where({ id: req.params.id }).update({ is_active: true }).returning('*');
+    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+    const { password_hash: _, ...rest } = user;
+    eventBus.emit('entity:updated', {
+      entityType: 'user',
+      entityId: user.id,
+      title: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      userId: req.user!.userId,
+    });
+    res.json(rest);
   } catch (e) { next(e); }
 });
 
@@ -295,7 +332,33 @@ router.get('/health', async (_req: Request, res: Response, next: NextFunction) =
         rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
       },
       modules: 30,
+      maintenanceMode: config.maintenanceMode,
+      logBufferSize: logBuffer.length,
     });
+  } catch (e) { next(e); }
+});
+
+router.post('/maintenance/toggle', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.user!.role !== 'ADMIN') { res.status(403).json({ error: 'Admin only' }); return; }
+    const current = config.maintenanceMode;
+    config.maintenanceMode = !current;
+    res.json({ maintenanceMode: config.maintenanceMode });
+  } catch (e) { next(e); }
+});
+
+// ─── LOGS ───
+
+router.get('/logs', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ lines: [...logBuffer] });
+  } catch (e) { next(e); }
+});
+
+router.delete('/logs', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    logBuffer.length = 0;
+    res.json({ message: 'Log buffer cleared' });
   } catch (e) { next(e); }
 });
 

@@ -218,6 +218,39 @@ router.delete('/plans/:planId/debriefs/:id', async (req: Request, res: Response,
   } catch (e) { next(e); }
 });
 
+// ── Roster ──
+
+router.get('/plans/:id/roster', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const roster = await db('mission_roster')
+      .select('mission_roster.*', 'users.first_name', 'users.last_name', 'users.email')
+      .leftJoin('users', 'mission_roster.user_id', 'users.id')
+      .where('mission_roster.mission_id', req.params.id)
+      .orderBy('mission_roster.assigned_at', 'asc');
+    res.json({ data: roster });
+  } catch (e) { next(e); }
+});
+
+router.post('/plans/:id/roster', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { user_id, role } = req.body;
+    const [item] = await db('mission_roster').insert({
+      id: uuid(),
+      mission_id: req.params.id,
+      user_id,
+      role: role || 'OPERATOR',
+    }).returning('*');
+    res.status(201).json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/plans/:id/roster/:userId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('mission_roster').where({ mission_id: req.params.id, user_id: req.params.userId }).del();
+    res.json({ message: 'Member removed from roster' });
+  } catch (e) { next(e); }
+});
+
 // ── Attachments (must come before generic /:id) ──
 
 router.get('/plans/:id/attachments', async (req: Request, res: Response, next: NextFunction) => {

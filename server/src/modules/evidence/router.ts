@@ -123,43 +123,84 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   } catch (e) { next(e); }
 });
 
-router.post('/', auditLog('evidence:upload', 'evidence'), upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', auditLog('evidence:upload', 'evidence'), upload.array('files', 20), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const file = req.file;
+    const files = req.files as Express.Multer.File[];
     const data = req.body;
-    const evidenceId = uuid();
-    const metadata = file ? buildMetadata(file) : {};
 
-    const custodyEntry = {
-      action: 'UPLOADED',
-      timestamp: new Date().toISOString(),
-      user_id: req.user!.userId,
-    };
+    if (!files || files.length === 0) {
+      const evidenceId = uuid();
+      const custodyEntry = {
+        action: 'CREATED',
+        timestamp: new Date().toISOString(),
+        user_id: req.user!.userId,
+      };
 
-    const [item] = await db('evidence').insert({
-      id: evidenceId,
-      type: data.type || 'OTHER',
-      title: data.title || file?.originalname || 'Untitled',
-      description: data.description,
-      case_id: data.caseId || null,
-      report_id: data.reportId || null,
-      file_path: file ? file.filename : null,
-      file_size: file ? file.size : null,
-      mime_type: file ? file.mimetype : null,
-      classification: data.classification || 'UNCLASSIFIED',
-      uploaded_by: req.user!.userId,
-      metadata: JSON.stringify(metadata),
-      chain_of_custody: JSON.stringify([custodyEntry]),
-    }).returning('*');
+      const [item] = await db('evidence').insert({
+        id: evidenceId,
+        type: data.type || 'OTHER',
+        title: data.title || 'Untitled',
+        description: data.description,
+        case_id: data.caseId || null,
+        report_id: data.reportId || null,
+        file_path: null,
+        file_size: null,
+        mime_type: null,
+        classification: data.classification || 'UNCLASSIFIED',
+        uploaded_by: req.user!.userId,
+        metadata: JSON.stringify({}),
+        chain_of_custody: JSON.stringify([custodyEntry]),
+      }).returning('*');
 
-    eventBus.emit('entity:created', {
-      entityType: 'evidence',
-      entityId: item.id,
-      title: item.title || 'New evidence',
-      userId: req.user!.userId,
-    });
+      eventBus.emit('entity:created', {
+        entityType: 'evidence',
+        entityId: item.id,
+        title: item.title || 'New evidence',
+        userId: req.user!.userId,
+      });
 
-    res.status(201).json(item);
+      res.status(201).json(item);
+      return;
+    }
+
+    const items: any[] = [];
+    for (const file of files) {
+      const evidenceId = uuid();
+      const metadata = buildMetadata(file);
+
+      const custodyEntry = {
+        action: 'UPLOADED',
+        timestamp: new Date().toISOString(),
+        user_id: req.user!.userId,
+      };
+
+      const [item] = await db('evidence').insert({
+        id: evidenceId,
+        type: data.type || 'OTHER',
+        title: data.title || file.originalname || 'Untitled',
+        description: data.description,
+        case_id: data.caseId || null,
+        report_id: data.reportId || null,
+        file_path: file.filename,
+        file_size: file.size,
+        mime_type: file.mimetype,
+        classification: data.classification || 'UNCLASSIFIED',
+        uploaded_by: req.user!.userId,
+        metadata: JSON.stringify(metadata),
+        chain_of_custody: JSON.stringify([custodyEntry]),
+      }).returning('*');
+
+      eventBus.emit('entity:created', {
+        entityType: 'evidence',
+        entityId: item.id,
+        title: item.title || 'New evidence',
+        userId: req.user!.userId,
+      });
+
+      items.push(item);
+    }
+
+    res.status(201).json({ data: items, count: items.length });
   } catch (e) { next(e); }
 });
 

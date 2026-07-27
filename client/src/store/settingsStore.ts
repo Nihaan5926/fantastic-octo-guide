@@ -4,6 +4,9 @@ import { persist } from 'zustand/middleware';
 type Theme = 'dark' | 'light' | 'system';
 type Density = 'comfortable' | 'compact';
 type DefaultPage = '/dashboard' | '/reports' | '/cases' | '/threats' | '/missions';
+type Language = 'en' | 'fr' | 'es' | 'de' | 'ar';
+type DateFormat = 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+type TimeFormat = '12h' | '24h';
 
 interface AppSettings {
   theme: Theme;
@@ -16,6 +19,10 @@ interface AppSettings {
   showAnimations: boolean;
   itemsPerPage: number;
   compactCards: boolean;
+  language: Language;
+  timezone: string;
+  dateFormat: DateFormat;
+  timeFormat: TimeFormat;
 
   setTheme: (t: Theme) => void;
   setDensity: (d: Density) => void;
@@ -28,6 +35,10 @@ interface AppSettings {
   setShowAnimations: (v: boolean) => void;
   setItemsPerPage: (n: number) => void;
   setCompactCards: (v: boolean) => void;
+  setLanguage: (l: Language) => void;
+  setTimezone: (tz: string) => void;
+  setDateFormat: (df: DateFormat) => void;
+  setTimeFormat: (tf: TimeFormat) => void;
   resetToDefaults: () => void;
   applyTheme: () => void;
 }
@@ -43,6 +54,10 @@ const DEFAULTS = {
   showAnimations: true,
   itemsPerPage: 20,
   compactCards: false,
+  language: 'en' as Language,
+  timezone: 'UTC',
+  dateFormat: 'MM/DD/YYYY' as DateFormat,
+  timeFormat: '12h' as TimeFormat,
 };
 
 export const useSettingsStore = create<AppSettings>()(
@@ -74,6 +89,10 @@ export const useSettingsStore = create<AppSettings>()(
       setShowAnimations: (v) => set({ showAnimations: v }),
       setItemsPerPage: (n) => set({ itemsPerPage: n }),
       setCompactCards: (v) => set({ compactCards: v }),
+      setLanguage: (language) => set({ language }),
+      setTimezone: (timezone) => set({ timezone }),
+      setDateFormat: (dateFormat) => set({ dateFormat }),
+      setTimeFormat: (timeFormat) => set({ timeFormat }),
 
       resetToDefaults: () => set(DEFAULTS),
 
@@ -85,7 +104,6 @@ export const useSettingsStore = create<AppSettings>()(
         } else if (theme === 'light') {
           root.classList.remove('dark');
         } else {
-          // System
           const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           if (prefersDark) root.classList.add('dark');
           else root.classList.remove('dark');
@@ -105,6 +123,10 @@ export const useSettingsStore = create<AppSettings>()(
         showAnimations: state.showAnimations,
         itemsPerPage: state.itemsPerPage,
         compactCards: state.compactCards,
+        language: state.language,
+        timezone: state.timezone,
+        dateFormat: state.dateFormat,
+        timeFormat: state.timeFormat,
       }),
     }
   )

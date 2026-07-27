@@ -1,12 +1,20 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import * as service from './service';
-import { registerSchema, loginSchema, refreshSchema, totpTokenSchema, login2faSchema, forgotPasswordSchema, resetPasswordSchema } from './validator';
+import { registerSchema, loginSchema, refreshSchema, totpTokenSchema, login2faSchema, forgotPasswordSchema, resetPasswordSchema, deleteAccountSchema } from './validator';
 import { authenticate } from '../../middleware/auth';
 import { loginRateLimiter } from '../../middleware/rate-limiter';
 import { eventBus } from '../../core/event-bus';
 import { logger } from '../../utils/logger';
+import multer from 'multer';
+import path from 'path';
+import { config } from '../../config';
+import { db } from '../../db/knex';
+import { v4 as uuid } from 'uuid';
+import fs from 'fs';
 
 const router = Router();
+
+router.get('/ping', (_req, res) => { res.json({ pong: true }); });
 
 function validate(schema: any) {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -159,6 +167,72 @@ router.get('/login-history', authenticate, async (req: Request, res: Response, n
   try {
     const history = await service.getLoginHistory(req.user!.userId);
     res.json(history);
+  } catch (e) { next(e); }
+});
+
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(config.upload.dir, 'avatars');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuid()}${ext}`);
+  },
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, GIF, and WebP images are allowed'));
+    }
+  },
+});
+
+router.post('/avatar', authenticate, avatarUpload.single('avatar'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const file = req.file;
+    if (!file) { res.status(400).json({ error: 'Image file is required' }); return; }
+    const avatarUrl = `uploads/avatars/${file.filename}`;
+    await db('users').where({ id: req.user!.userId }).update({ avatar_url: avatarUrl, updated_at: db.fn.now() });
+    res.json({ avatarUrl });
+  } catch (e) { next(e); }
+});
+
+router.get('/avatar', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await db('users').where({ id: req.user!.userId }).select('avatar_url').first();
+    if (!user?.avatar_url) { res.status(404).json({ error: 'No avatar' }); return; }
+    const avatarPath = path.resolve(config.upload.dir, '..', user.avatar_url);
+    res.sendFile(avatarPath);
+  } catch (e) { next(e); }
+});
+
+router.get('/activity', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const activity = await service.getUserActivity(req.user!.userId);
+    res.json({ data: activity });
+  } catch (e) { next(e); }
+});
+
+router.delete('/me', authenticate, validate(deleteAccountSchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await service.deleteAccount(req.user!.userId, req.body.password);
+    res.json({ message: 'Account deleted successfully' });
+  } catch (e) { next(e); }
+});
+
+router.get('/export-data', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await service.exportUserData(req.user!.userId);
+    res.setHeader('Content-Disposition', `attachment; filename="export-${req.user!.userId}.json"`);
+    res.json(data);
   } catch (e) { next(e); }
 });
 

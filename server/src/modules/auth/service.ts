@@ -292,6 +292,7 @@ export async function getProfile(userId: string) {
     lastLoginAt: user.last_login_at,
     createdAt: user.created_at,
     totpEnabled: user.totp_enabled || false,
+    avatarUrl: user.avatar_url || null,
   };
 }
 
@@ -505,4 +506,81 @@ export async function getLoginHistory(userId: string) {
     success: entry.success,
     createdAt: entry.created_at,
   }));
+}
+
+export async function getUserActivity(userId: string) {
+  const auditRows = await db('audit_logs')
+    .where({ user_id: userId })
+    .orderBy('created_at', 'desc')
+    .limit(50)
+    .select('id', 'action', 'entity_type', 'entity_id', 'changes', 'created_at');
+
+  const feedRows = await db('activity_feed')
+    .where({ user_id: userId })
+    .orderBy('created_at', 'desc')
+    .limit(50)
+    .select('id', 'action', 'entity_type', 'entity_id', 'changes', 'created_at');
+
+  const merged = [
+    ...auditRows.map((r) => ({ ...r, source: 'audit' as const })),
+    ...feedRows.map((r) => ({ ...r, source: 'feed' as const })),
+  ]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 50);
+
+  return merged.map((entry) => ({
+    id: entry.id,
+    action: entry.action,
+    entityType: entry.entity_type,
+    entityId: entry.entity_id,
+    changes: entry.changes,
+    source: entry.source,
+    createdAt: entry.created_at,
+  }));
+}
+
+export async function deleteAccount(userId: string, password: string) {
+  const user = await db('users').where({ id: userId }).first();
+  if (!user) throw new AppError(404, 'User not found');
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) throw new AppError(401, 'Invalid password');
+
+  await db('users').where({ id: userId }).update({
+    email: `deleted-${userId.slice(0, 8)}@anonymized.local`,
+    password_hash: '',
+    first_name: 'Deleted',
+    last_name: 'User',
+    rank: null,
+    is_active: false,
+    metadata: JSON.stringify({ deletedAt: new Date().toISOString(), reason: 'user_requested' }),
+    avatar_url: null,
+  });
+
+  await db('user_sessions').where({ user_id: userId }).del();
+  await db('refresh_tokens').where({ user_id: userId }).del();
+}
+
+export async function exportUserData(userId: string) {
+  const user = await db('users')
+    .select('id', 'email', 'first_name', 'last_name', 'rank', 'clearance', 'metadata', 'last_login_at', 'created_at')
+    .where({ id: userId })
+    .first();
+
+  const tableQueries: Array<{ key: string; query: () => Promise<any[]> }> = [
+    { key: 'reports', query: () => db('reports').where('author_id', userId).select('*') },
+    { key: 'cases', query: () => db('cases').where('author_id', userId).select('*') },
+    { key: 'evidence', query: () => db('evidence').where('author_id', userId).select('*') },
+    { key: 'comments', query: () => db('entity_comments').where('author_id', userId).select('*') },
+    { key: 'attachments', query: () => db('entity_attachments').where('uploaded_by', userId).select('*') },
+    { key: 'activity', query: () => db('activity_feed').where('user_id', userId).select('*') },
+  ];
+
+  const data: Record<string, any> = { user };
+
+  for (const tq of tableQueries) {
+    data[tq.key] = await tq.query();
+  }
+
+  return { exportedAt: new Date().toISOString(), userId, ...data };
 }

@@ -10,9 +10,10 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   variant?: 'danger' | 'primary';
   isLoading?: boolean;
+  children?: React.ReactNode;
 }
 
-export default function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmLabel = 'Confirm', variant = 'danger', isLoading }: ConfirmDialogProps) {
+export default function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmLabel = 'Confirm', variant = 'danger', isLoading, children }: ConfirmDialogProps) {
   if (!isOpen) return null;
 
   return (
@@ -28,6 +29,7 @@ export default function ConfirmDialog({ isOpen, onClose, onConfirm, title, messa
             <p className="text-sm text-text-secondary">{message}</p>
           </div>
         </div>
+        {children && <div className="mt-4">{children}</div>}
         <div className="flex justify-end gap-3 mt-6">
           <button onClick={onClose} className="btn-secondary" disabled={isLoading}>Cancel</button>
           <button onClick={onConfirm} disabled={isLoading} className={variant === 'danger' ? 'btn-danger' : 'btn-primary'}>

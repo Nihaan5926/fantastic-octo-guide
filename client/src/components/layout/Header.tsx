@@ -135,8 +135,12 @@ export default function Header({ onToggleSidebar }: { onToggleSidebar: () => voi
             onClick={() => setShowMenu(!showMenu)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-bg-hover transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white font-bold text-sm">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
+            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={`/${user.avatarUrl}`} alt="" className="w-full h-full object-cover" style={{ maxWidth: 200, maxHeight: 200 }} />
+              ) : (
+                `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`
+              )}
             </div>
             <div className="hidden sm:block text-left">
               <div className="text-sm font-medium text-text-primary">

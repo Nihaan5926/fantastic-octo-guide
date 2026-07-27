@@ -1,11 +1,45 @@
 import React from 'react';
 import toast from 'react-hot-toast';
-import { Settings, Moon, Sun, Monitor, Trash2, LogOut, Loader2, Download, Shield, Database, HardDrive, Volume2, VolumeX, Zap, ZapOff, LayoutDashboard, FileText, Briefcase, Shield as ShieldIcon, Target, RefreshCw, GripVertical } from 'lucide-react';
+import { Settings, Moon, Sun, Monitor, Trash2, LogOut, Loader2, Download, Shield, Database, HardDrive, Volume2, VolumeX, Zap, ZapOff, LayoutDashboard, FileText, Briefcase, Shield as ShieldIcon, Target, RefreshCw, GripVertical, Globe, Clock, AlertTriangle, UserX } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useNavigate } from 'react-router-dom';
+import api from '../api/client';
+
+type Language = 'en' | 'fr' | 'es' | 'de' | 'ar';
+type DateFormat = 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+type TimeFormat = '12h' | '24h';
+
+const LANGUAGE_LABELS: Record<Language, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch', ar: 'العربية' };
+
+const TIMEZONES = (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') : [
+  'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Tokyo', 'Asia/Shanghai',
+  'Australia/Sydney', 'Pacific/Auckland',
+];
+
+function getDatePreview(df: DateFormat, locale: string): string {
+  const d = new Date(2025, 5, 15);
+  try {
+    return new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  } catch {
+    return df;
+  }
+}
+
+function getTimePreview(tf: TimeFormat, locale: string): string {
+  const d = new Date(2025, 5, 15, 14, 30, 0);
+  try {
+    const hour12 = tf === '12h';
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', hour12 }).format(d);
+  } catch {
+    return tf === '12h' ? '02:30 PM' : '14:30';
+  }
+}
+
+const LOCALE_MAP: Record<Language, string> = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', de: 'de-DE', ar: 'ar-SA' };
 
 export default function SettingsPage() {
   const { logout } = useAuthStore();
@@ -14,6 +48,11 @@ export default function SettingsPage() {
   const [showLogout, setShowLogout] = React.useState(false);
   const [showReset, setShowReset] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isExporting, setIsExporting] = React.useState(false);
+
+  const [deletePassword, setDeletePassword] = React.useState('');
+  const [showDeleteAccount, setShowDeleteAccount] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const handleThemeChange = (theme: 'dark' | 'light' | 'system') => {
     settings.setTheme(theme);
@@ -33,25 +72,40 @@ export default function SettingsPage() {
   };
 
   const handleExportAll = async () => {
-    const exportData = {
-      settings: {
-        theme: settings.theme,
-        density: settings.density,
-        defaultPage: settings.defaultPage,
-        notificationSound: settings.notificationSound,
-        autoSaveForms: settings.autoSaveForms,
-        showAnimations: settings.showAnimations,
-        itemsPerPage: settings.itemsPerPage,
-      },
-      preferences: settings.sidebarCategories,
-      exportedAt: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `icmp-settings-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click(); URL.revokeObjectURL(url);
-    toast.success('Settings exported');
+    setIsExporting(true);
+    try {
+      const { data } = await api.get('/auth/export-data');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('All data exported');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Export failed');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      toast.error('Please enter your password');
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await api.delete('/auth/me', { data: { password: deletePassword } });
+      toast.success('Account deleted');
+      await logout();
+      navigate('/login');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Deletion failed');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -124,6 +178,67 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Locale & Time */}
+      <div className="card">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4">Locale & Time</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium block mb-2">Language</label>
+            <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+              {(Object.keys(LANGUAGE_LABELS) as Language[]).map((lang) => (
+                <button key={lang} onClick={() => settings.setLanguage(lang)}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                    settings.language === lang ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-bg-primary text-text-secondary hover:border-border-light'
+                  }`}>
+                  <Globe size={14} className="inline mr-1" />
+                  {LANGUAGE_LABELS[lang]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-2">Timezone</label>
+            <select value={settings.timezone} onChange={(e) => settings.setTimezone(e.target.value)}
+              className="input max-w-xs">
+              {TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-2">Date Format</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD'] as DateFormat[]).map((df) => (
+                <button key={df} onClick={() => settings.setDateFormat(df)}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
+                    settings.dateFormat === df ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-bg-primary text-text-secondary hover:border-border-light'
+                  }`}>
+                  <span className="text-sm font-medium">{df}</span>
+                  <span className="text-[10px] text-text-muted">e.g. {getDatePreview(df, LOCALE_MAP[settings.language])}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-2">Time Format</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['12h', '24h'] as TimeFormat[]).map((tf) => (
+                <button key={tf} onClick={() => settings.setTimeFormat(tf)}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
+                    settings.timeFormat === tf ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-bg-primary text-text-secondary hover:border-border-light'
+                  }`}>
+                  <span className="text-sm font-medium">{tf === '12h' ? '12-Hour' : '24-Hour'}</span>
+                  <span className="text-[10px] text-text-muted">e.g. {getTimePreview(tf, LOCALE_MAP[settings.language])}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Behavior */}
       <div className="card">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4">Behavior</h3>
@@ -184,11 +299,36 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Data & Storage */}
+      {/* Data & Privacy */}
       <div className="card">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4">Data & Storage</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4">Data & Privacy</h3>
         <div className="space-y-3">
-          <button onClick={handleExportAll} className="w-full flex items-center justify-between p-3 bg-bg-primary rounded-lg hover:bg-bg-hover transition-colors">
+          <button onClick={handleExportAll} disabled={isExporting} className="w-full flex items-center justify-between p-3 bg-bg-primary rounded-lg hover:bg-bg-hover transition-colors">
+            <div className="flex items-center gap-3">
+              {isExporting ? <Loader2 size={18} className="animate-spin text-accent" /> : <Download size={18} className="text-accent" />}
+              <div className="text-left"><div className="text-sm font-medium">Export All My Data</div><div className="text-xs text-text-muted">Download all reports, cases, evidence, and more</div></div>
+            </div>
+            <span className="text-text-muted">&rarr;</span>
+          </button>
+          <button onClick={() => {
+            const exportData = {
+              settings: {
+                theme: settings.theme, density: settings.density, defaultPage: settings.defaultPage,
+                notificationSound: settings.notificationSound, autoSaveForms: settings.autoSaveForms,
+                showAnimations: settings.showAnimations, itemsPerPage: settings.itemsPerPage,
+                language: settings.language, timezone: settings.timezone,
+                dateFormat: settings.dateFormat, timeFormat: settings.timeFormat,
+              },
+              preferences: settings.sidebarCategories,
+              exportedAt: new Date().toISOString(),
+            };
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `icmp-settings-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click(); URL.revokeObjectURL(url);
+            toast.success('Settings exported');
+          }} className="w-full flex items-center justify-between p-3 bg-bg-primary rounded-lg hover:bg-bg-hover transition-colors">
             <div className="flex items-center gap-3">
               <Download size={18} className="text-accent" />
               <div className="text-left"><div className="text-sm font-medium">Export Settings</div><div className="text-xs text-text-muted">Download your configuration as JSON</div></div>
@@ -227,19 +367,38 @@ export default function SettingsPage() {
       {/* Account */}
       <div className="card border-accent-danger/30">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4">Account</h3>
-        <button onClick={() => setShowLogout(true)} className="w-full flex items-center justify-between p-3 bg-bg-primary rounded-lg hover:bg-accent-danger/10 transition-colors">
-          <div className="flex items-center gap-3">
-            <LogOut size={18} className="text-accent-danger" />
-            <div className="text-left"><div className="text-sm font-medium text-accent-danger">Sign Out</div><div className="text-xs text-text-muted">Log out of your account</div></div>
-          </div>
-          <span className="text-text-muted">&rarr;</span>
-        </button>
+        <div className="space-y-3">
+          <button onClick={() => setShowLogout(true)} className="w-full flex items-center justify-between p-3 bg-bg-primary rounded-lg hover:bg-accent-danger/10 transition-colors">
+            <div className="flex items-center gap-3">
+              <LogOut size={18} className="text-accent-danger" />
+              <div className="text-left"><div className="text-sm font-medium text-accent-danger">Sign Out</div><div className="text-xs text-text-muted">Log out of your account</div></div>
+            </div>
+            <span className="text-text-muted">&rarr;</span>
+          </button>
+          <button onClick={() => setShowDeleteAccount(true)} className="w-full flex items-center justify-between p-3 bg-bg-primary rounded-lg hover:bg-accent-danger/10 transition-colors">
+            <div className="flex items-center gap-3">
+              <UserX size={18} className="text-accent-danger" />
+              <div className="text-left"><div className="text-sm font-medium text-accent-danger">Delete Account</div><div className="text-xs text-text-muted">Permanently remove your account and data</div></div>
+            </div>
+            <span className="text-text-muted">&rarr;</span>
+          </button>
+        </div>
       </div>
 
       <ConfirmDialog isOpen={showLogout} onClose={() => setShowLogout(false)} onConfirm={handleLogout}
         title="Sign Out" message="Are you sure you want to sign out?" confirmLabel="Sign Out" variant="danger" isLoading={isLoading} />
       <ConfirmDialog isOpen={showReset} onClose={() => setShowReset(false)} onConfirm={handleReset}
         title="Reset Settings" message="This will restore all settings to their factory defaults. Your data will not be affected." confirmLabel="Reset" variant="danger" />
+
+      <ConfirmDialog isOpen={showDeleteAccount} onClose={() => { setShowDeleteAccount(false); setDeletePassword(''); }} onConfirm={handleDeleteAccount}
+        title="Delete Account" confirmLabel="Delete My Account" variant="danger" isLoading={isDeleting}
+        message="This action is permanent and cannot be undone. Your personal data will be anonymized and your account will be deactivated.">
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-text-secondary mb-1">Enter your password to confirm</label>
+          <input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)}
+            className="input w-full" placeholder="Your password" />
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

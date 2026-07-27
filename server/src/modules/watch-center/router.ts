@@ -8,6 +8,56 @@ import { v4 as uuid } from 'uuid';
 const router = Router();
 router.use(authenticate);
 
+// ── Escalation Rules ─────────────────────────────────────────────────────────
+
+router.get('/rules', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const rules = await db('watch_logs')
+      .select('metadata')
+      .where('log_type', 'ESCALATION_RULE')
+      .orWhereRaw("metadata->>'type' = 'escalation_rule'");
+    res.json({ data: rules.map((r: any) => typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata).filter(Boolean) });
+  } catch (e) { next(e); }
+});
+
+router.post('/rules', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { condition, action, notify_user_ids } = req.body;
+    const metadata = {
+      type: 'escalation_rule',
+      rule_id: uuid(),
+      condition,
+      action,
+      notify_user_ids: notify_user_ids || [],
+      created_by: req.user!.userId,
+      created_at: new Date().toISOString(),
+    };
+
+    await db('watch_logs').insert({
+      id: uuid(),
+      author_id: req.user!.userId,
+      log_type: 'ESCALATION_RULE',
+      title: `Escalation Rule: ${condition}`,
+      content: JSON.stringify({ condition, action, notify_user_ids }),
+      severity: 'HIGH',
+      metadata: JSON.stringify(metadata),
+    });
+
+    res.status(201).json(metadata);
+  } catch (e) { next(e); }
+});
+
+router.delete('/rules/:ruleId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const deleted = await db('watch_logs')
+      .where('log_type', 'ESCALATION_RULE')
+      .whereRaw("metadata->>'rule_id' = ?", [req.params.ruleId])
+      .del();
+    if (!deleted) { res.status(404).json({ error: 'Rule not found' }); return; }
+    res.json({ message: 'Escalation rule deleted' });
+  } catch (e) { next(e); }
+});
+
 // ── Shift Schedules ──────────────────────────────────────────────────────────
 
 router.get('/shifts', async (req: Request, res: Response, next: NextFunction) => {
@@ -146,12 +196,38 @@ router.post('/logs', async (req: Request, res: Response, next: NextFunction) => 
     const [item] = await db('watch_logs').insert({
       id: uuid(), author_id: req.user!.userId, ...req.body,
     }).returning('*');
+
     eventBus.emit('entity:created', {
       entityType: 'watch_log',
       entityId: item.id,
       title: item.log_type || 'New watch log',
       userId: req.user!.userId,
     });
+
+    const rules = await db('watch_logs')
+      .where('log_type', 'ESCALATION_RULE')
+      .whereRaw("metadata->>'type' = 'escalation_rule'");
+    for (const ruleRow of rules) {
+      const rule = typeof ruleRow.metadata === 'string' ? JSON.parse(ruleRow.metadata) : (ruleRow.metadata || {});
+      const condition = rule.condition || '';
+      const match = condition.match(/severity\s*=\s*(\w+)/i);
+      if (match && match[1].toUpperCase() === (item.severity || '').toUpperCase()) {
+        const userIds: string[] = rule.notify_user_ids || [];
+        for (const uid of userIds) {
+          try {
+            await db('notifications').insert({
+              id: uuid(),
+              user_id: uid,
+              title: `Watch Center Alert: ${item.severity} - ${item.title || 'New Log'}`,
+              message: item.content || `Severity: ${item.severity}`,
+              type: 'WATCH_ESCALATION',
+              is_read: false,
+            });
+          } catch { /* skip if notifications table not ready */ }
+        }
+      }
+    }
+
     res.status(201).json(item);
   } catch (e) { next(e); }
 });

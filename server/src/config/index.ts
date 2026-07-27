@@ -39,4 +39,6 @@ export const config = {
     dir: path.resolve(__dirname, '..', process.env.UPLOAD_DIR || './uploads'),
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800', 10),
   },
+
+  maintenanceMode: process.env.MAINTENANCE_MODE === 'true',
 };

@@ -13,6 +13,9 @@ const missionPlansApi = {
     }),
   deleteAttachment: (id: string, attachmentId: string) =>
     api.delete(`/missions/plans/${id}/attachments/${attachmentId}`),
+  getRoster: (id: string) => api.get(`/missions/plans/${id}/roster`),
+  addRosterMember: (id: string, data: any) => api.post(`/missions/plans/${id}/roster`, data),
+  removeRosterMember: (id: string, userId: string) => api.delete(`/missions/plans/${id}/roster/${userId}`),
 };
 
 const missionBriefsApi = {

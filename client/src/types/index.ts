@@ -11,6 +11,7 @@ export interface User {
   lastLoginAt?: string;
   createdAt?: string;
   totpEnabled?: boolean;
+  avatarUrl?: string | null;
 }
 
 export interface SessionInfo {

@@ -11,7 +11,7 @@ import Modal from '../../../components/common/Modal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import FileUpload from '../../../components/common/FileUpload';
 import RichTextEditor from '../../../components/common/RichTextEditor';
-import { ArrowLeft, Send, Printer, Share2, Plus, Trash2, Download, File, Paperclip, CheckCircle, XCircle, Edit3 } from 'lucide-react';
+import { ArrowLeft, Send, Printer, Share2, Plus, Trash2, Download, File, Paperclip, CheckCircle, XCircle, Edit3, Clock, History } from 'lucide-react';
 
 const STATUS_FLOW = ['DRAFT', 'IN_REVIEW', 'APPROVED', 'DISSEMINATED'];
 
@@ -34,12 +34,15 @@ export default function ReportsDetail() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [versions, setVersions] = useState<any[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
       fetchOne(id);
       fetchComments();
       fetchAttachments();
+      fetchVersions();
     }
   }, [id]);
 
@@ -56,6 +59,17 @@ export default function ReportsDetail() {
       const { data } = await reportsApi.listAttachments(id);
       setAttachments(data.data || []);
     } catch {}
+  };
+
+  const fetchVersions = async () => {
+    if (!id) return;
+    setVersionsLoading(true);
+    try {
+      const { data } = await reportsApi.getVersions(id);
+      setVersions(data.data || []);
+    } catch { /* ignore */ } finally {
+      setVersionsLoading(false);
+    }
   };
 
   const handleUploadAttachment = async () => {
@@ -349,6 +363,36 @@ export default function ReportsDetail() {
               <p className="text-sm text-text-secondary whitespace-pre-wrap">{selected.summary}</p>
             </div>
           )}
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <History size={18} /> Version History ({versions.length})
+              </h2>
+            </div>
+            {versionsLoading ? (
+              <p className="text-sm text-text-muted text-center py-4">Loading versions...</p>
+            ) : versions.length === 0 ? (
+              <p className="text-sm text-text-muted text-center py-4">No previous versions. Versions are created when you update the report.</p>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {versions.map((v: any) => (
+                  <div key={v.id} className="border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-accent">v{v.version_num}</span>
+                      <span className="text-xs text-text-muted flex items-center gap-1">
+                        <Clock size={10} /> {new Date(v.edited_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-text-secondary truncate">Title: {v.title || '—'}</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      Edited by: {v.editor_first || ''} {v.editor_last || ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="card">
             <h2 className="text-lg font-semibold mb-2">Content</h2>

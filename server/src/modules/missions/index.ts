@@ -1,5 +1,6 @@
 import type { Module } from '../../core/types';
 import router from './router';
+import * as rosterMigration from '../../db/migrations/missions/002_roster';
 
 const manifest = {
   name: 'missions',
@@ -16,5 +17,11 @@ const manifest = {
   globalSearchEnabled: true,
 } as const;
 
-const mod: Module = { manifest, router, migrations: [] };
+const mod: Module = {
+  manifest,
+  router,
+  migrations: [
+    { name: 'missions_002_roster', up: rosterMigration.up, down: rosterMigration.down },
+  ],
+};
 export default mod;

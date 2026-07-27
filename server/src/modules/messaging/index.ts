@@ -1,5 +1,6 @@
 import type { Module } from '../../core/types';
 import router from './router';
+import * as threadingMigration from '../../db/migrations/messaging/002_threading';
 
 const manifest = {
   name: 'messaging',
@@ -16,5 +17,11 @@ const manifest = {
   globalSearchEnabled: true,
 } as const;
 
-const mod: Module = { manifest, router, migrations: [] };
+const mod: Module = {
+  manifest,
+  router,
+  migrations: [
+    { name: 'messaging_002_threading', up: threadingMigration.up, down: threadingMigration.down },
+  ],
+};
 export default mod;

@@ -9,7 +9,7 @@ import SearchBar from '../../../components/common/SearchBar';
 import { FormInput, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Trash2, GitGraph, Plus, ZoomIn, ZoomOut, RotateCcw, Clock, Network, Globe, Grid3X3 } from 'lucide-react';
+import { Trash2, GitGraph, Plus, ZoomIn, ZoomOut, RotateCcw, Clock, Network, Globe, Grid3X3, Upload } from 'lucide-react';
 
 const relationshipTypeOptions = [
   { value: 'RELATED_TO', label: 'Related To' },
@@ -505,6 +505,9 @@ export default function RelationshipList() {
   const [showTimeline, setShowTimeline] = useState(false);
   const [timelineEntityFilter, setTimelineEntityFilter] = useState('');
   const [allRelationships, setAllRelationships] = useState<any[]>([]);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importCsv, setImportCsv] = useState('');
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     fetchList({ page, search, type: typeFilter });
@@ -560,6 +563,24 @@ export default function RelationshipList() {
     }
   };
 
+  const handleImport = async () => {
+    if (!importCsv.trim()) return;
+    setImporting(true);
+    try {
+      const result = await analysisApi.importCsv(importCsv);
+      toast.success(`${result.data.created} relationship(s) imported`);
+      setImportOpen(false);
+      setImportCsv('');
+      fetchList({ page, search, type: typeFilter });
+      fetchGraph();
+      fetchGraphStats();
+    } catch {
+      toast.error('Import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleNodeFilter = (nodeId: string | null) => {
     setFilterNodeId(nodeId);
     if (nodeId) {
@@ -609,7 +630,11 @@ export default function RelationshipList() {
 
   return (
     <div>
-      <PageHeader title="Analysis" subtitle="Manage entity relationships" onCreate={openCreate} createLabel="New Relationship" />
+      <PageHeader title="Analysis" subtitle="Manage entity relationships" onCreate={openCreate} createLabel="New Relationship">
+        <button onClick={() => setImportOpen(true)} className="btn-secondary flex items-center gap-2">
+          <Upload size={16} /> Import CSV
+        </button>
+      </PageHeader>
 
       {graphStats && (
         <div className="card mb-6">
@@ -773,6 +798,26 @@ export default function RelationshipList() {
         variant="danger"
         isLoading={isSubmitting}
       />
+
+      <Modal isOpen={importOpen} onClose={() => setImportOpen(false)} title="Import Relationships from CSV" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">
+            Paste CSV data with headers: <code className="text-accent bg-bg-tertiary px-1 rounded">source_type,source_id,target_type,target_id,relationship_type</code>
+          </p>
+          <textarea
+            className="w-full h-48 bg-bg-tertiary border border-border rounded-lg p-3 text-sm text-text-primary resize-y font-mono"
+            value={importCsv}
+            onChange={(e) => setImportCsv(e.target.value)}
+            placeholder={`source_type,source_id,target_type,target_id,relationship_type\nreport,abc-123,case,def-456,RELATED_TO\nsource,ghi-789,threat_actor,jkl-012,ATTRIBUTED_TO`}
+          />
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <button onClick={() => setImportOpen(false)} className="btn-secondary">Cancel</button>
+            <button onClick={handleImport} disabled={importing || !importCsv.trim()} className="btn-primary">
+              {importing ? 'Importing...' : 'Import'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

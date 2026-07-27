@@ -1,5 +1,6 @@
 import type { Module } from '../../core/types';
 import router from './router';
+import * as prerequisitesMigration from '../../db/migrations/training/002_prerequisites';
 
 const manifest = {
   name: 'training',
@@ -16,5 +17,11 @@ const manifest = {
   globalSearchEnabled: true,
 } as const;
 
-const mod: Module = { manifest, router, migrations: [] };
+const mod: Module = {
+  manifest,
+  router,
+  migrations: [
+    { name: 'training_002_prerequisites', up: prerequisitesMigration.up, down: prerequisitesMigration.down },
+  ],
+};
 export default mod;

@@ -6,7 +6,7 @@ import {
   UserCheck, GraduationCap, Clock, Target, Crosshair,
   ListChecks, Map, Radio, Fingerprint, DollarSign,
   UserX, MessageSquare, Presentation, Building2,
-  Scale, Archive, Wallet, ChevronDown, Activity
+  Scale, Archive, Wallet, ChevronDown, Activity, Upload, Terminal
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -21,6 +21,8 @@ const iconMap: Record<string, React.ReactNode> = {
   BarChart3: <BarChart3 size={18} />,
   Shield: <Shield size={18} />,
   Activity: <Activity size={18} />,
+  Upload: <Upload size={18} />,
+  Terminal: <Terminal size={18} />,
   UserCheck: <UserCheck size={18} />,
   GraduationCap: <GraduationCap size={18} />,
   Clock: <Clock size={18} />,
@@ -86,6 +88,8 @@ const staticNavItems: { category: string; items: { label: string; path: string; 
     { label: 'Users', path: '/admin/users', icon: 'Users', category: 'ADMIN', order: 90 },
     { label: 'Audit Logs', path: '/admin/audit-logs', icon: 'ListChecks', category: 'ADMIN', order: 91 },
     { label: 'System Health', path: '/admin/health', icon: 'Activity', category: 'ADMIN', order: 92 },
+    { label: 'Bulk Import', path: '/admin/bulk-import', icon: 'Upload', category: 'ADMIN', order: 93 },
+    { label: 'System Logs', path: '/admin/logs', icon: 'Terminal', category: 'ADMIN', order: 94 },
   ]},
 ];
 

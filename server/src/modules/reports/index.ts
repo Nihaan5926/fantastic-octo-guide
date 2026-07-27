@@ -1,5 +1,6 @@
 import type { Module } from '../../core/types';
 import router from './router';
+import * as versionHistoryMigration from '../../db/migrations/reports/002_version_history';
 
 const manifest = {
   name: 'reports',
@@ -16,5 +17,11 @@ const manifest = {
   globalSearchEnabled: true,
 } as const;
 
-const mod: Module = { manifest, router, migrations: [] };
+const mod: Module = {
+  manifest,
+  router,
+  migrations: [
+    { name: 'reports_002_version_history', up: versionHistoryMigration.up, down: versionHistoryMigration.down },
+  ],
+};
 export default mod;

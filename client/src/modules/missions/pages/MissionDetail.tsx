@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Plus, FileText, ClipboardCheck, CheckCircle, Clock, Circle, AlertTriangle, Edit, Trash2, Download, File, Paperclip } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, ClipboardCheck, CheckCircle, Clock, Circle, AlertTriangle, Edit, Trash2, Download, File, Paperclip, Users, UserPlus } from 'lucide-react';
 import FileUpload from '../../../components/common/FileUpload';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { missionPlansApi } from '../api';
@@ -25,7 +25,7 @@ const priorityOptions = [
   { value: 'HIGH', label: 'High' }, { value: 'CRITICAL', label: 'Critical' },
 ];
 
-type TabKey = 'info' | 'briefs' | 'debriefs' | 'attachments';
+type TabKey = 'info' | 'briefs' | 'debriefs' | 'attachments' | 'roster';
 
 const phases = [
   { key: 'PLANNING', label: 'Planning', step: 0 },
@@ -72,6 +72,11 @@ export default function MissionDetail() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deleteAttachId, setDeleteAttachId] = useState<string | null>(null);
+  const [roster, setRoster] = useState<any[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterUserId, setRosterUserId] = useState('');
+  const [rosterRole, setRosterRole] = useState('OPERATOR');
+  const [rosterAdding, setRosterAdding] = useState(false);
 
   useEffect(() => {
     if (id) { fetchPlan(id); fetchBriefs(id); fetchDebriefs(id); }
@@ -88,6 +93,41 @@ export default function MissionDetail() {
       setAttachments(data.data || []);
     } catch { } finally {
       setAttachmentsLoading(false);
+    }
+  };
+
+  const fetchRoster = async () => {
+    setRosterLoading(true);
+    try {
+      const { data } = await missionPlansApi.getRoster(id!);
+      setRoster(data.data || []);
+    } catch {} finally {
+      setRosterLoading(false);
+    }
+  };
+
+  const handleAddRosterMember = async () => {
+    if (!rosterUserId.trim()) return;
+    setRosterAdding(true);
+    try {
+      await missionPlansApi.addRosterMember(id!, { user_id: rosterUserId, role: rosterRole });
+      toast.success('Member added to roster');
+      setRosterUserId('');
+      fetchRoster();
+    } catch {
+      toast.error('Failed to add member');
+    } finally {
+      setRosterAdding(false);
+    }
+  };
+
+  const handleRemoveRosterMember = async (userId: string) => {
+    try {
+      await missionPlansApi.removeRosterMember(id!, userId);
+      toast.success('Member removed from roster');
+      fetchRoster();
+    } catch {
+      toast.error('Failed to remove member');
     }
   };
 
@@ -249,8 +289,8 @@ export default function MissionDetail() {
       </div>
 
       <div className="flex gap-2 border-b border-border">
-        {(['info','briefs','debriefs','attachments'] as TabKey[]).map((t) => (
-          <button key={t} onClick={() => { setActiveTab(t); if (t === 'attachments' && attachments.length === 0) fetchAttachments(); }} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === t ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+        {(['info','briefs','debriefs','attachments','roster'] as TabKey[]).map((t) => (
+          <button key={t} onClick={() => { setActiveTab(t); if (t === 'attachments' && attachments.length === 0) fetchAttachments(); if (t === 'roster' && roster.length === 0) fetchRoster(); }} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === t ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
         ))}
       </div>
 
@@ -579,6 +619,50 @@ export default function MissionDetail() {
         message="Are you sure you want to delete this attachment? This action cannot be undone."
         isLoading={false}
       />
+
+      {activeTab === 'roster' && (
+        <div className="card">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Users size={18} /> Personnel Roster ({roster.length})
+            </h2>
+          </div>
+          {rosterLoading ? (
+            <p className="text-text-muted text-sm text-center py-8">Loading roster...</p>
+          ) : roster.length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-8">No personnel assigned to this roster</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {roster.map((m: any) => (
+                <div key={m.user_id || m.id} className="flex items-center justify-between p-3 bg-bg-primary rounded-lg border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-bg-tertiary flex items-center justify-center text-xs font-bold">
+                      {(m.first_name?.[0] || '')}{(m.last_name?.[0] || '')}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{m.first_name} {m.last_name}</p>
+                      <p className="text-xs text-text-muted">{m.email || m.user_id}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs badge border bg-bg-tertiary text-text-secondary">{m.role}</span>
+                    <button onClick={() => handleRemoveRosterMember(m.user_id)} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-red-400">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-3 p-3 border border-dashed border-border rounded-lg">
+            <FormInput label="User ID" value={rosterUserId} onChange={(e) => setRosterUserId(e.target.value)} placeholder="Enter user ID" className="flex-1" />
+            <FormInput label="Role" value={rosterRole} onChange={(e) => setRosterRole(e.target.value)} placeholder="OPERATOR" className="w-32" />
+            <button onClick={handleAddRosterMember} disabled={rosterAdding || !rosterUserId.trim()} className="btn-primary flex items-center gap-1">
+              <UserPlus size={14} /> Add
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

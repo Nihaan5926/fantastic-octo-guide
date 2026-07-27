@@ -20,6 +20,7 @@ interface AdminStore {
   updateUser: (id: string, data: any) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   permanentDeleteUser: (id: string) => Promise<void>;
+  reactivateUser: (id: string) => Promise<void>;
   fetchRoles: () => Promise<void>;
   createRole: (data: any) => Promise<void>;
   updateRole: (id: string, data: any) => Promise<void>;
@@ -47,6 +48,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
   updateUser: async (id, data) => { await adminApi.updateUser(id, data); await get().fetchUsers(); },
   deleteUser: async (id) => { await adminApi.deleteUser(id); set((s) => ({ users: s.users.map((u) => u.id === id ? { ...u, is_active: false } : u) })); },
   permanentDeleteUser: async (id) => { await adminApi.permanentDeleteUser(id); set((s) => ({ users: s.users.filter((u) => u.id !== id) })); },
+  reactivateUser: async (id) => { await adminApi.reactivateUser(id); set((s) => ({ users: s.users.map((u) => u.id === id ? { ...u, is_active: true } : u) })); },
 
   fetchRoles: async () => {
     try { const d = await adminApi.listRoles(); set({ roles: d.data }); } catch {}

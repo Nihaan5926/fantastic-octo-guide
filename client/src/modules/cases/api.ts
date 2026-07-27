@@ -9,6 +9,8 @@ export const casesApi = {
   addMember: (id: string, data: any) => api.post(`/cases/${id}/members`, data),
   removeMember: (id: string, userId: string) => api.delete(`/cases/${id}/members/${userId}`),
   getTimeline: (id: string) => api.get(`/cases/${id}/timeline`),
+  getChildren: (id: string) => api.get(`/cases/${id}/children`),
+  createChild: (id: string, data: any) => api.post(`/cases/${id}/children`, data),
   listAttachments: (id: string) => api.get(`/cases/${id}/attachments`),
   uploadAttachment: (id: string, formData: FormData) =>
     api.post(`/cases/${id}/attachments`, formData, {

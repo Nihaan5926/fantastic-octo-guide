@@ -18,4 +18,6 @@ export const reportsApi = {
     }),
   deleteAttachment: (id: string, attachmentId: string) =>
     api.delete(`/reports/${id}/attachments/${attachmentId}`),
+  getVersions: (id: string) => api.get(`/reports/${id}/versions`),
+  getVersion: (id: string, vid: string) => api.get(`/reports/${id}/versions/${vid}`),
 };

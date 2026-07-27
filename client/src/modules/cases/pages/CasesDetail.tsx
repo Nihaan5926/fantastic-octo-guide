@@ -10,7 +10,7 @@ import { StatusBadge, ClassificationBadge, PriorityBadge } from '../../../compon
 import { FormInput, FormSelect, FormTextarea } from '../../../components/common/FormComponents';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
-import { ArrowLeft, Plus, X, UserPlus, Trash2, Link2, ListChecks, Download, File, Paperclip } from 'lucide-react';
+import { ArrowLeft, Plus, X, UserPlus, Trash2, Link2, ListChecks, Download, File, Paperclip, GitBranch } from 'lucide-react';
 import FileUpload from '../../../components/common/FileUpload';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { DetailSkeleton, CardSkeleton } from '../../../components/common/LoadingSkeleton';
@@ -46,7 +46,7 @@ const roleOptions = [
   { value: 'OBSERVER', label: 'Observer' },
 ];
 
-type Tab = 'details' | 'evidence' | 'timeline' | 'tasks' | 'attachments';
+type Tab = 'details' | 'evidence' | 'timeline' | 'tasks' | 'attachments' | 'hierarchy';
 
 export default function CasesDetail() {
   const { id } = useParams<{ id: string }>();
@@ -80,6 +80,11 @@ export default function CasesDetail() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deleteAttachId, setDeleteAttachId] = useState<string | null>(null);
+  const [childrenCases, setChildrenCases] = useState<any[]>([]);
+  const [childrenLoading, setChildrenLoading] = useState(false);
+  const [childModalOpen, setChildModalOpen] = useState(false);
+  const [childForm, setChildForm] = useState({ title: '', description: '', priority: 'MEDIUM', classification: 'UNCLASSIFIED' });
+  const [childCreating, setChildCreating] = useState(false);
 
   useEffect(() => {
     if (id) fetchOne(id);
@@ -111,6 +116,7 @@ export default function CasesDetail() {
     if (tab === 'timeline' && timeline.length === 0) fetchTimeline();
     if (tab === 'tasks' && tasks.length === 0) fetchTasks();
     if (tab === 'attachments' && attachments.length === 0) fetchAttachments();
+    if (tab === 'hierarchy' && childrenCases.length === 0) fetchChildren();
   };
 
   const fetchTasks = async () => {
@@ -230,6 +236,32 @@ export default function CasesDetail() {
     }
   };
 
+  const fetchChildren = async () => {
+    setChildrenLoading(true);
+    try {
+      const { data } = await casesApi.getChildren(id!);
+      setChildrenCases(data.data || []);
+    } catch {} finally {
+      setChildrenLoading(false);
+    }
+  };
+
+  const handleCreateChild = async () => {
+    if (!childForm.title.trim()) return;
+    setChildCreating(true);
+    try {
+      await casesApi.createChild(id!, childForm);
+      toast.success('Sub-case created');
+      setChildModalOpen(false);
+      setChildForm({ title: '', description: '', priority: 'MEDIUM', classification: 'UNCLASSIFIED' });
+      fetchChildren();
+    } catch {
+      toast.error('Failed to create sub-case');
+    } finally {
+      setChildCreating(false);
+    }
+  };
+
   const handleUploadAttachment = async () => {
     if (!id || !selectedFile) return;
     setUploading(true);
@@ -314,7 +346,7 @@ export default function CasesDetail() {
       </div>
 
       <div className="flex items-center gap-1 mb-6 border-b border-border">
-          {(['details', 'evidence', 'timeline', 'tasks', 'attachments'] as Tab[]).map((tab) => (
+          {(['details', 'evidence', 'timeline', 'tasks', 'attachments', 'hierarchy'] as Tab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => handleTabChange(tab)}
@@ -446,6 +478,20 @@ export default function CasesDetail() {
           </div>
 
           <div className="space-y-6">
+            {selected.parent_case_id && (
+              <div className="card border-l-4 border-l-accent p-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <GitBranch size={16} className="text-accent" />
+                  <span className="text-text-muted">Parent Case:</span>
+                  <button
+                    onClick={() => navigate(`/cases/${selected.parent_case_id}`)}
+                    className="text-accent hover:underline font-medium"
+                  >
+                    {selected.parent_case_id}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="card">
               <h2 className="text-lg font-semibold mb-4">Metadata</h2>
               <dl className="space-y-3 text-sm">
@@ -691,6 +737,62 @@ export default function CasesDetail() {
         message="Are you sure you want to delete this attachment? This action cannot be undone."
         isLoading={false}
       />
+
+      {activeTab === 'hierarchy' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <GitBranch size={18} /> Sub-Cases
+            </h2>
+            <button onClick={() => setChildModalOpen(true)} className="btn-primary text-sm flex items-center gap-1">
+              <Plus size={14} /> Create Sub-Case
+            </button>
+          </div>
+          {childrenLoading ? (
+            <div className="card text-center py-12">
+              <div className="animate-pulse text-text-muted">Loading sub-cases...</div>
+            </div>
+          ) : childrenCases.length === 0 ? (
+            <div className="card text-center py-12">
+              <GitBranch size={32} className="mx-auto mb-3 text-text-muted" />
+              <p className="text-text-muted">No sub-cases yet. Create one to build a hierarchy.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {childrenCases.map((child: any) => (
+                <div key={child.id} className="card flex items-center justify-between cursor-pointer hover:bg-bg-hover"
+                  onClick={() => navigate(`/cases/${child.id}`)}>
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">{child.reference_number}: {child.title}</p>
+                    <p className="text-xs text-text-muted">{child.description?.slice(0, 100) || 'No description'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <StatusBadge label={child.status} color={statusColorMap[child.status] || 'gray'} />
+                      <PriorityBadge level={child.priority} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Modal isOpen={childModalOpen} onClose={() => setChildModalOpen(false)} title="Create Sub-Case" size="md">
+        <div className="space-y-4">
+          <FormInput label="Title" value={childForm.title} onChange={(e) => setChildForm({ ...childForm, title: e.target.value })} required />
+          <FormTextarea label="Description" value={childForm.description} onChange={(e) => setChildForm({ ...childForm, description: e.target.value })} rows={3} />
+          <div className="grid grid-cols-2 gap-4">
+            <FormSelect label="Priority" options={priorityOptions} value={childForm.priority} onChange={(e) => setChildForm({ ...childForm, priority: e.target.value })} />
+            <FormSelect label="Classification" options={classificationOptions} value={childForm.classification} onChange={(e) => setChildForm({ ...childForm, classification: e.target.value })} />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <button onClick={() => setChildModalOpen(false)} className="btn-secondary">Cancel</button>
+            <button onClick={handleCreateChild} disabled={childCreating || !childForm.title.trim()} className="btn-primary">
+              {childCreating ? 'Creating...' : 'Create Sub-Case'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

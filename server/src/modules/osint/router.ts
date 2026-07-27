@@ -72,10 +72,14 @@ export function startScheduler() {
             { title: 'Scheduled result from source', url: 'https://example.com/scheduled-article', content_snippet: 'Automatically collected intelligence data...' },
           ];
           for (const result of sampleResults) {
-            await db('osint_collected_items').insert({
-              id: uuid(), task_id: task.id, title: result.title, url: result.url,
-              content_snippet: result.content_snippet, source_type: 'NEWS',
-            });
+            const existing = await db('osint_collected_items')
+              .where({ task_id: task.id, url: result.url }).first();
+            if (!existing) {
+              await db('osint_collected_items').insert({
+                id: uuid(), task_id: task.id, title: result.title, url: result.url,
+                content_snippet: result.content_snippet, source_type: 'NEWS',
+              });
+            }
           }
           await db('osint_collection_tasks').where({ id: task.id }).update({
             status: 'COMPLETED',
@@ -160,10 +164,14 @@ router.post('/tasks/:id/run', async (req: Request, res: Response, next: NextFunc
     ];
 
     for (const result of sampleResults) {
-      await db('osint_collected_items').insert({
-        id: uuid(), task_id: req.params.id, title: result.title, url: result.url,
-        content_snippet: result.content_snippet, source_type: 'NEWS',
-      });
+      const existing = await db('osint_collected_items')
+        .where({ task_id: req.params.id, url: result.url }).first();
+      if (!existing) {
+        await db('osint_collected_items').insert({
+          id: uuid(), task_id: req.params.id, title: result.title, url: result.url,
+          content_snippet: result.content_snippet, source_type: 'NEWS',
+        });
+      }
     }
 
     await db('osint_collection_tasks').where({ id: req.params.id }).update({
@@ -188,6 +196,30 @@ router.get('/tasks/:id/results', async (req: Request, res: Response, next: NextF
     ]);
 
     res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (e) { next(e); }
+});
+
+router.get('/tasks/:id/results/export', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const format = req.query.format === 'json' ? 'json' : 'csv';
+    const items = await db('osint_collected_items').where({ task_id: req.params.id }).orderBy('created_at', 'desc');
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="osint-results-${req.params.id}.json"`);
+      res.json({ data: items });
+      return;
+    }
+
+    const headers = ['title', 'url', 'source_type', 'content_snippet', 'captured_at'];
+    const csvRows = [headers.map((h) => `"${h}"`).join(',')];
+    items.forEach((r: any) => {
+      csvRows.push(headers.map((h) => `"${String(r[h] || '').replace(/"/g, '""')}"`).join(','));
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="osint-results-${req.params.id}.csv"`);
+    res.send(csvRows.join('\n'));
   } catch (e) { next(e); }
 });
 

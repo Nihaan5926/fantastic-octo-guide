@@ -1,5 +1,6 @@
 import type { Module } from '../../core/types';
 import router from './router';
+import * as lineItemsMigration from '../../db/migrations/budget/002_line_items';
 
 const manifest = {
   name: 'budget',
@@ -16,5 +17,11 @@ const manifest = {
   globalSearchEnabled: true,
 } as const;
 
-const mod: Module = { manifest, router, migrations: [] };
+const mod: Module = {
+  manifest,
+  router,
+  migrations: [
+    { name: 'budget_002_line_items', up: lineItemsMigration.up, down: lineItemsMigration.down },
+  ],
+};
 export default mod;

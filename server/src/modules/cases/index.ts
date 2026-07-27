@@ -1,5 +1,6 @@
 import type { Module } from '../../core/types';
 import router from './router';
+import * as caseHierarchyMigration from '../../db/migrations/cases/002_case_hierarchy';
 
 const manifest = {
   name: 'cases',
@@ -16,5 +17,11 @@ const manifest = {
   globalSearchEnabled: true,
 } as const;
 
-const mod: Module = { manifest, router, migrations: [] };
+const mod: Module = {
+  manifest,
+  router,
+  migrations: [
+    { name: 'cases_002_case_hierarchy', up: caseHierarchyMigration.up, down: caseHierarchyMigration.down },
+  ],
+};
 export default mod;

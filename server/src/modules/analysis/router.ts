@@ -38,6 +38,53 @@ router.post('/relationships', async (req: Request, res: Response, next: NextFunc
   } catch (e) { next(e); }
 });
 
+router.post('/relationships/import', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { csv } = req.body;
+    if (!csv || !csv.trim()) {
+      res.status(400).json({ error: 'CSV data is required' });
+      return;
+    }
+
+    const lines = csv.trim().split('\n').filter((l: string) => l.trim());
+    if (lines.length < 2) {
+      res.status(400).json({ error: 'CSV must have a header row and at least one data row' });
+      return;
+    }
+
+    const headers = lines[0].split(',').map((h: string) => h.trim().replace(/^"|"$/g, ''));
+    const dataRows = lines.slice(1);
+
+    const created: any[] = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const values = dataRows[i].split(',').map((v: string) => v.trim().replace(/^"|"$/g, ''));
+      const row: Record<string, string> = {};
+      headers.forEach((h: string, idx: number) => { row[h] = values[idx] || ''; });
+
+      const { source_type, source_id, target_type, target_id, relationship_type } = row;
+      if (!source_type || !source_id || !target_type || !target_id || !relationship_type) {
+        errors.push(`Row ${i + 2}: missing required fields`);
+        continue;
+      }
+
+      try {
+        const [item] = await db('entity_relationships').insert({
+          id: uuid(),
+          source_type, source_id, target_type, target_id,
+          relationship_type, created_by: req.user!.userId,
+        }).returning('*');
+        created.push(item);
+      } catch (e: any) {
+        errors.push(`Row ${i + 2}: ${e.message}`);
+      }
+    }
+
+    res.json({ created: created.length, errors, items: created });
+  } catch (e) { next(e); }
+});
+
 router.delete('/relationships/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('entity_relationships').where({ id: req.params.id }).del();

@@ -10,6 +10,7 @@ import ResetPasswordPage from './pages/ResetPassword';
 import DashboardPage from './pages/Dashboard';
 import ProfilePage from './pages/Profile';
 import SettingsPage from './pages/Settings';
+import MaintenancePage from './pages/Maintenance';
 
 import reportsModule from './modules/reports';
 import sourcesModule from './modules/sources';
@@ -102,6 +103,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/maintenance" element={<MaintenancePage />} />
           </Route>
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardPage />} />

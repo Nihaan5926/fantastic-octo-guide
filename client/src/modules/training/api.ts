@@ -18,4 +18,7 @@ export const trainingApi = {
   createAAR: (data: any) => api.post(`${BASE}/aar`, data),
   updateAAR: (id: string, data: any) => api.put(`${BASE}/aar/${id}`, data),
   deleteAAR: (id: string) => api.delete(`${BASE}/aar/${id}`),
+  getPrerequisites: (id: string) => api.get(`${BASE}/courses/${id}/prerequisites`),
+  addPrerequisite: (id: string, data: any) => api.post(`${BASE}/courses/${id}/prerequisites`, data),
+  removePrerequisite: (id: string, prereqId: string) => api.delete(`${BASE}/courses/${id}/prerequisites/${prereqId}`),
 };

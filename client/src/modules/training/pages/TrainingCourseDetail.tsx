@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, BookOpen } from 'lucide-react';
 import { trainingApi } from '../api';
 import { StatusBadge } from '../../../components/common/Badges';
 import DataTable from '../../../components/common/DataTable';
+import { FormInput } from '../../../components/common/FormComponents';
 import { DetailSkeleton } from '../../../components/common/LoadingSkeleton';
 
 const enrollmentStatusColorMap: Record<string, string> = {
@@ -16,6 +17,10 @@ export default function TrainingCourseDetail() {
   const navigate = useNavigate();
   const [course, setCourse] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [prerequisites, setPrerequisites] = useState<any[]>([]);
+  const [prereqModalOpen, setPrereqModalOpen] = useState(false);
+  const [prereqCourseName, setPrereqCourseName] = useState('');
+  const [prereqAdding, setPrereqAdding] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -24,6 +29,7 @@ export default function TrainingCourseDetail() {
       Promise.all([
         trainingApi.getCourse(id).then(({ data }: any) => setCourse(data.data || data)),
         trainingApi.listEnrollments({ course_id: id, limit: 100 }).then(({ data }: any) => setEnrollments(data.data || [])),
+        trainingApi.getPrerequisites(id).then(({ data }: any) => setPrerequisites(data.data || [])),
       ])
         .catch(() => toast.error('Failed to load course'))
         .finally(() => setLoading(false));
@@ -41,6 +47,35 @@ export default function TrainingCourseDetail() {
       </div>
     );
   }
+
+  const handleAddPrerequisite = async () => {
+    if (!prereqCourseName.trim() || !id) return;
+    setPrereqAdding(true);
+    try {
+      await trainingApi.addPrerequisite(id, { prerequisite_course_id: prereqCourseName });
+      toast.success('Prerequisite added');
+      setPrereqModalOpen(false);
+      setPrereqCourseName('');
+      const { data } = await trainingApi.getPrerequisites(id);
+      setPrerequisites(data.data || []);
+    } catch {
+      toast.error('Failed to add prerequisite');
+    } finally {
+      setPrereqAdding(false);
+    }
+  };
+
+  const handleRemovePrerequisite = async (prereqId: string) => {
+    if (!id) return;
+    try {
+      await trainingApi.removePrerequisite(id, prereqId);
+      toast.success('Prerequisite removed');
+      const { data } = await trainingApi.getPrerequisites(id);
+      setPrerequisites(data.data || []);
+    } catch {
+      toast.error('Failed to remove prerequisite');
+    }
+  };
 
   const enrollmentColumns = [
     { key: 'user_id', label: 'Student ID' },
@@ -116,6 +151,34 @@ export default function TrainingCourseDetail() {
       </div>
 
       <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
+            <BookOpen size={16} /> Prerequisites ({prerequisites.length})
+          </h3>
+          <button onClick={() => setPrereqModalOpen(true)} className="btn-primary text-xs flex items-center gap-1 py-1 px-2">
+            <Plus size={12} /> Add
+          </button>
+        </div>
+        {prerequisites.length === 0 ? (
+          <p className="text-sm text-text-muted text-center py-4">No prerequisites set</p>
+        ) : (
+          <div className="space-y-2">
+            {prerequisites.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between p-3 bg-bg-primary rounded-lg border border-border">
+                <div>
+                  <p className="text-sm font-medium">{p.prerequisite_title || p.prerequisite_course_id}</p>
+                  {p.prerequisite_description && <p className="text-xs text-text-muted truncate max-w-xs">{p.prerequisite_description}</p>}
+                </div>
+                <button onClick={() => handleRemovePrerequisite(p.id)} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-red-400">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
         <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Enrolled Students ({enrollments.length})</h3>
         <DataTable
           columns={enrollmentColumns}
@@ -125,6 +188,23 @@ export default function TrainingCourseDetail() {
           emptyMessage="No students enrolled"
         />
       </div>
+
+      {prereqModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPrereqModalOpen(false)}>
+          <div className="bg-bg-card rounded-xl border border-border shadow-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">Add Prerequisite</h3>
+            <div className="space-y-4">
+              <FormInput label="Prerequisite Course ID" value={prereqCourseName} onChange={(e) => setPrereqCourseName(e.target.value)} placeholder="Enter course ID" />
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                <button onClick={() => setPrereqModalOpen(false)} className="btn-secondary">Cancel</button>
+                <button onClick={handleAddPrerequisite} disabled={prereqAdding || !prereqCourseName.trim()} className="btn-primary">
+                  {prereqAdding ? 'Adding...' : 'Add'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { User, Shield, Mail, Calendar, Key, Bell, Save, Loader2, Eye, EyeOff, BadgeCheck, Clock, Smartphone, Monitor, XCircle, Copy, RefreshCw, Check, Trash2 } from 'lucide-react';
+import { User, Shield, Mail, Calendar, Key, Bell, Save, Loader2, Eye, EyeOff, BadgeCheck, Clock, Smartphone, Monitor, XCircle, Copy, RefreshCw, Check, Trash2, Camera, Activity, Zap, Download, Plus, Code } from 'lucide-react';
 import { toCanvas } from 'qrcode';
 import { useAuthStore } from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
@@ -18,25 +18,47 @@ interface SessionInfo {
   is_current: boolean;
 }
 
+interface ActivityEntry {
+  id: string;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  changes: any;
+  source: string;
+  createdAt: string;
+}
+
+type NotifKey = 'reportUpdates' | 'caseUpdates' | 'threatAlerts' | 'missionChanges' | 'systemNotices' | 'briefingReminders';
+
+interface NotifChannel {
+  inApp: boolean;
+  email: boolean;
+  digest: 'instant' | 'daily' | 'weekly';
+}
+
+type NotifPrefs = Record<NotifKey, NotifChannel>;
+
+const DEFAULT_CHANNEL: NotifChannel = { inApp: false, email: false, digest: 'instant' };
+
 export default function ProfilePage() {
   const { user, fetchProfile } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'notifications' | '2fa' | 'sessions'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'notifications' | '2fa' | 'sessions' | 'activity' | 'apiKeys'>('profile');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Profile form
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', email: '', rank: '', clearance: '' });
 
-  // Password form
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPw, setShowPw] = useState({ current: false, new: false, confirm: false });
 
-  // Notification preferences
-  const [notifPrefs, setNotifPrefs] = useState({
-    reportUpdates: true, caseUpdates: true, threatAlerts: true,
-    missionChanges: false, systemNotices: true, briefingReminders: false,
+  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>({
+    reportUpdates: { ...DEFAULT_CHANNEL, inApp: true },
+    caseUpdates: { ...DEFAULT_CHANNEL, inApp: true },
+    threatAlerts: { ...DEFAULT_CHANNEL, inApp: true },
+    missionChanges: { ...DEFAULT_CHANNEL },
+    systemNotices: { ...DEFAULT_CHANNEL, inApp: true },
+    briefingReminders: { ...DEFAULT_CHANNEL },
   });
 
-  // 2FA state
   const [totpEnabled, setTotpEnabled] = useState(false);
   const [totpSetup, setTotpSetup] = useState<{ secret: string; otpauthUrl: string } | null>(null);
   const [totpToken, setTotpToken] = useState('');
@@ -44,11 +66,16 @@ export default function ProfilePage() {
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Sessions state
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [isSessionsLoading, setIsSessionsLoading] = useState(false);
   const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<SessionInfo | null>(null);
+
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [isActivityLoading, setIsActivityLoading] = useState(false);
+
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const lastUserId = React.useRef<string | null>(null);
 
@@ -66,7 +93,16 @@ export default function ProfilePage() {
       let meta = (user as any).metadata;
       if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch {} }
       if (meta?.notifications) {
-        setNotifPrefs((prev) => ({ ...prev, ...meta.notifications }));
+        const saved = meta.notifications as Record<string, Partial<NotifChannel>>;
+        setNotifPrefs((prev) => {
+          const next = { ...prev };
+          for (const key of Object.keys(next) as NotifKey[]) {
+            if (saved[key]) {
+              next[key] = { ...DEFAULT_CHANNEL, ...saved[key] };
+            }
+          }
+          return next;
+        });
       }
     }
   }, [user]);
@@ -82,6 +118,25 @@ export default function ProfilePage() {
       toast.error(err.response?.data?.error || 'Failed to update profile');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const { data } = await api.post('/auth/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Avatar uploaded');
+      await fetchProfile();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to upload avatar');
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -120,11 +175,17 @@ export default function ProfilePage() {
     }
   };
 
-  const toggleNotif = (key: keyof typeof notifPrefs) => {
-    setNotifPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleInApp = (key: NotifKey) => {
+    setNotifPrefs((prev) => ({ ...prev, [key]: { ...prev[key], inApp: !prev[key].inApp } }));
   };
 
-  // ─── 2FA Handlers ───
+  const toggleEmail = (key: NotifKey) => {
+    setNotifPrefs((prev) => ({ ...prev, [key]: { ...prev[key], email: !prev[key].email } }));
+  };
+
+  const setDigest = (key: NotifKey, digest: NotifChannel['digest']) => {
+    setNotifPrefs((prev) => ({ ...prev, [key]: { ...prev[key], digest } }));
+  };
 
   const handleSetup2FA = async () => {
     setIs2faLoading(true);
@@ -180,14 +241,11 @@ export default function ProfilePage() {
     toast.success('Copied to clipboard');
   };
 
-  // Generate QR code on canvas when setup is done
   useEffect(() => {
     if (totpSetup && canvasRef.current) {
       toCanvas(canvasRef.current, totpSetup.otpauthUrl, { width: 200, margin: 1 });
     }
   }, [totpSetup]);
-
-  // ─── Sessions Handlers ───
 
   const fetchSessions = async () => {
     setIsSessionsLoading(true);
@@ -201,10 +259,22 @@ export default function ProfilePage() {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'sessions') {
-      fetchSessions();
+  const fetchActivity = async () => {
+    setIsActivityLoading(true);
+    try {
+      const { data } = await api.get('/auth/activity');
+      setActivityLog(data.data || []);
+    } catch {
+      toast.error('Failed to load activity');
+    } finally {
+      setIsActivityLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'sessions') fetchSessions();
+    if (activeTab === 'activity') fetchActivity();
+    if (activeTab === 'apiKeys') fetchApiKeys();
   }, [activeTab]);
 
   const handleRevokeSession = async (sessionId: string) => {
@@ -231,8 +301,60 @@ export default function ProfilePage() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString();
+  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
+
+  const [apiKeys, setApiKeys] = useState<{ id: string; name: string; scopes: string[]; last_used_at: string | null; expires_at: string | null; is_active: boolean; created_at: string }[]>([]);
+  const [isApiKeysLoading, setIsApiKeysLoading] = useState(false);
+  const [showCreateKey, setShowCreateKey] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyScopes, setNewKeyScopes] = useState('');
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+
+  const fetchApiKeys = async () => {
+    setIsApiKeysLoading(true);
+    try {
+      const { data } = await api.get('/admin/api-keys');
+      setApiKeys(data.data || []);
+    } catch {
+      toast.error('Failed to load API keys');
+    } finally {
+      setIsApiKeysLoading(false);
+    }
+  };
+
+  const handleCreateApiKey = async () => {
+    try {
+      const scopes = newKeyScopes.split(',').map((s) => s.trim()).filter(Boolean);
+      const { data } = await api.post('/admin/api-keys', { name: newKeyName, scopes });
+      setCreatedKey(data.key);
+      setShowCreateKey(false);
+      setNewKeyName('');
+      setNewKeyScopes('');
+      fetchApiKeys();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to create API key');
+    }
+  };
+
+  const handleRevokeApiKey = async (id: string) => {
+    try {
+      await api.delete(`/admin/api-keys/${id}`);
+      setApiKeys((prev) => prev.filter((k) => k.id !== id));
+      toast.success('API key revoked');
+    } catch {
+      toast.error('Failed to revoke API key');
+    }
+  };
+
+  const formatRelative = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   };
 
   const parseBrowser = (ua: string | null) => {
@@ -248,11 +370,32 @@ export default function ProfilePage() {
     <div className="space-y-6 max-w-3xl">
       <PageHeader title="Profile & Settings" subtitle="Manage your account, security, and preferences" />
 
-      {/* Profile Card */}
       <div className="card">
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-white font-bold text-xl shrink-0">
-            {user?.firstName?.[0]}{user?.lastName?.[0]}
+          <div className="relative">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingAvatar}
+              className="relative group cursor-pointer"
+              title="Upload avatar"
+            >
+              {user?.avatarUrl ? (
+                <img
+                  src={`/${user.avatarUrl}`}
+                  alt="Avatar"
+                  className="w-16 h-16 rounded-2xl object-cover max-w-[200px] max-h-[200px]"
+                  style={{ maxWidth: 200, maxHeight: 200 }}
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-white font-bold text-xl shrink-0">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                {isUploadingAvatar ? <Loader2 size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}
+              </div>
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleAvatarUpload} className="hidden" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">{user?.firstName} {user?.lastName}</h2>
@@ -284,16 +427,14 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 border-b border-border mb-6 overflow-x-auto">
-          {(['profile', 'password', '2fa', 'notifications', 'sessions'] as const).map((t) => (
+          {(['profile', 'password', '2fa', 'notifications', 'sessions', 'activity', 'apiKeys'] as const).map((t) => (
             <button key={t} onClick={() => setActiveTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === t ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
-              {t === 'profile' ? 'Edit Profile' : t === 'password' ? 'Security' : t === '2fa' ? 'Two-Factor Auth' : t === 'notifications' ? 'Notifications' : 'Sessions'}
+              {t === 'profile' ? 'Edit Profile' : t === 'password' ? 'Security' : t === '2fa' ? 'Two-Factor Auth' : t === 'notifications' ? 'Notifications' : t === 'sessions' ? 'Sessions' : t === 'activity' ? 'Activity Log' : 'API Keys'}
             </button>
           ))}
         </div>
 
-        {/* Profile Tab */}
         {activeTab === 'profile' && (
           <form onSubmit={handleProfileSave} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -315,7 +456,6 @@ export default function ProfilePage() {
           </form>
         )}
 
-        {/* Password Tab */}
         {activeTab === 'password' && (
           <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
             <FormInput label="Current Password" type={showPw.current ? 'text' : 'password'} value={pwForm.currentPassword} onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })} required />
@@ -331,7 +471,6 @@ export default function ProfilePage() {
           </form>
         )}
 
-        {/* Two-Factor Auth Tab */}
         {activeTab === '2fa' && (
           <div className="space-y-6 max-w-md">
             {totpEnabled ? (
@@ -345,18 +484,14 @@ export default function ProfilePage() {
                     <p className="text-xs text-text-muted">Your account is protected with an authenticator app</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowDisableConfirm(true)}
-                  disabled={is2faLoading}
-                  className="btn-primary bg-accent-danger hover:bg-accent-danger/80"
-                >
+                <button onClick={() => setShowDisableConfirm(true)} disabled={is2faLoading} className="btn-primary bg-accent-danger hover:bg-accent-danger/80">
                   {is2faLoading ? <Loader2 className="animate-spin" size={16} /> : <XCircle size={16} />}
                   Disable 2FA
                 </button>
               </div>
             ) : totpSetup ? (
               <div className="space-y-4">
-                <p className="text-sm text-text-secondary">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+                <p className="text-sm text-text-secondary">Scan this QR code with your authenticator app</p>
                 <div className="flex justify-center bg-white p-4 rounded-xl">
                   <canvas ref={canvasRef}></canvas>
                 </div>
@@ -371,14 +506,7 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-text-secondary mb-1.5">Enter verification code from your app</label>
-                  <input
-                    type="text"
-                    value={totpToken}
-                    onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="input text-center text-xl tracking-widest"
-                    placeholder="000000"
-                    maxLength={6}
-                  />
+                  <input type="text" value={totpToken} onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, '').slice(0, 6))} className="input text-center text-xl tracking-widest" placeholder="000000" maxLength={6} />
                 </div>
                 <button onClick={handleEnable2FA} disabled={is2faLoading || totpToken.length !== 6} className="btn-primary">
                   {is2faLoading ? <Loader2 className="animate-spin" size={16} /> : <Shield size={16} />}
@@ -388,9 +516,7 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div>
-                <p className="text-sm text-text-secondary mb-4">
-                  Add an extra layer of security to your account by requiring a code from an authenticator app when you sign in.
-                </p>
+                <p className="text-sm text-text-secondary mb-4">Add an extra layer of security to your account by requiring a code from an authenticator app when you sign in.</p>
                 <button onClick={handleSetup2FA} disabled={is2faLoading} className="btn-primary">
                   {is2faLoading ? <Loader2 className="animate-spin" size={16} /> : <Smartphone size={16} />}
                   Setup Two-Factor Authentication
@@ -400,30 +526,55 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Notifications Tab */}
         {activeTab === 'notifications' && (
           <div className="space-y-4">
-            <p className="text-sm text-text-secondary mb-4">Choose which notifications you want to receive.</p>
-            {[
+            <p className="text-sm text-text-secondary mb-4">Choose which notifications you want to receive and how.</p>
+            {([
               { key: 'reportUpdates' as const, label: 'Report Updates', desc: 'When reports are created, updated, or reviewed' },
               { key: 'caseUpdates' as const, label: 'Case Updates', desc: 'Case status changes and new assignments' },
               { key: 'threatAlerts' as const, label: 'Threat Alerts', desc: 'New threat actors and high-confidence indicators' },
               { key: 'missionChanges' as const, label: 'Mission Updates', desc: 'Mission plan changes and briefs' },
               { key: 'systemNotices' as const, label: 'System Notices', desc: 'Platform announcements and maintenance' },
               { key: 'briefingReminders' as const, label: 'Briefing Reminders', desc: 'Upcoming briefings and read receipts' },
-            ].map((item) => (
-              <div key={item.key} className="flex items-center justify-between p-3 bg-bg-primary rounded-lg">
-                <div>
-                  <div className="text-sm font-medium">{item.label}</div>
-                  <div className="text-xs text-text-muted">{item.desc}</div>
+            ]).map((item) => (
+              <div key={item.key} className="p-4 bg-bg-primary rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium">{item.label}</div>
+                    <div className="text-xs text-text-muted">{item.desc}</div>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => toggleNotif(item.key)}
-                  className={`w-10 h-6 rounded-full transition-colors relative ${notifPrefs[item.key] ? 'bg-accent' : 'bg-bg-tertiary'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${notifPrefs[item.key] ? 'translate-x-5' : 'translate-x-1'}`} />
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-text-secondary">
+                    <button
+                      type="button"
+                      onClick={() => toggleInApp(item.key)}
+                      className={`w-9 h-5 rounded-full transition-colors relative ${notifPrefs[item.key].inApp ? 'bg-accent' : 'bg-bg-tertiary'}`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-transform ${notifPrefs[item.key].inApp ? 'translate-x-4.5' : 'translate-x-0.5'}`} style={{ transform: notifPrefs[item.key].inApp ? 'translateX(14px)' : 'translateX(2px)' }} />
+                    </button>
+                    In-App
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-text-secondary">
+                    <button
+                      type="button"
+                      onClick={() => toggleEmail(item.key)}
+                      className={`w-9 h-5 rounded-full transition-colors relative ${notifPrefs[item.key].email ? 'bg-accent' : 'bg-bg-tertiary'}`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-transform`} style={{ transform: notifPrefs[item.key].email ? 'translateX(14px)' : 'translateX(2px)' }} />
+                    </button>
+                    Email
+                  </label>
+                  <select
+                    value={notifPrefs[item.key].digest}
+                    onChange={(e) => setDigest(item.key, e.target.value as NotifChannel['digest'])}
+                    className="text-xs bg-bg-secondary border border-border rounded px-2 py-1 text-text-primary"
+                  >
+                    <option value="instant">Instant</option>
+                    <option value="daily">Daily Digest</option>
+                    <option value="weekly">Weekly Digest</option>
+                  </select>
+                </div>
               </div>
             ))}
             <button onClick={handleNotifSave} disabled={isSaving} className="btn-primary mt-4">
@@ -433,11 +584,10 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Sessions Tab */}
         {activeTab === 'sessions' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-text-secondary">Manage your active sessions. Revoke any sessions you don't recognize.</p>
+              <p className="text-sm text-text-secondary">Manage your active sessions.</p>
               <button onClick={fetchSessions} disabled={isSessionsLoading} className="btn-secondary text-sm">
                 <RefreshCw size={14} className={isSessionsLoading ? 'animate-spin' : ''} />
                 Refresh
@@ -445,58 +595,35 @@ export default function ProfilePage() {
             </div>
 
             {isSessionsLoading ? (
-              <div className="text-center py-8">
-                <Loader2 className="animate-spin mx-auto mb-2 text-text-muted" size={24} />
-                <p className="text-sm text-text-muted">Loading sessions...</p>
-              </div>
+              <div className="text-center py-8"><Loader2 className="animate-spin mx-auto mb-2 text-text-muted" size={24} /><p className="text-sm text-text-muted">Loading sessions...</p></div>
             ) : sessions.length === 0 ? (
-              <div className="text-center py-8">
-                <Monitor size={32} className="mx-auto mb-2 text-text-muted" />
-                <p className="text-sm text-text-muted">No active sessions found</p>
-              </div>
+              <div className="text-center py-8"><Monitor size={32} className="mx-auto mb-2 text-text-muted" /><p className="text-sm text-text-muted">No active sessions found</p></div>
             ) : (
               <>
                 {sessions.filter((s) => s.is_current).length > 1 && (
                   <div className="flex justify-end">
-                    <button
-                      onClick={() => setShowRevokeAllConfirm(true)}
-                      className="btn-secondary text-sm text-accent-danger"
-                    >
-                      <XCircle size={14} />
-                      Revoke All Other Sessions
+                    <button onClick={() => setShowRevokeAllConfirm(true)} className="btn-secondary text-sm text-accent-danger">
+                      <XCircle size={14} /> Revoke All Other Sessions
                     </button>
                   </div>
                 )}
                 <div className="space-y-3">
                   {sessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className={`p-4 rounded-xl border ${session.is_current ? 'border-accent bg-accent/5' : 'border-border bg-bg-primary'}`}
-                    >
+                    <div key={session.id} className={`p-4 rounded-xl border ${session.is_current ? 'border-accent bg-accent/5' : 'border-border bg-bg-primary'}`}>
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <Monitor size={18} className={session.is_current ? 'text-accent' : 'text-text-muted'} />
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium">{parseBrowser(session.user_agent)}</span>
-                              {session.is_current && (
-                                <span className="badge bg-accent text-white text-[10px]">Current</span>
-                              )}
+                              {session.is_current && <span className="badge bg-accent text-white text-[10px]">Current</span>}
                             </div>
-                            <p className="text-xs text-text-muted mt-0.5">
-                              {session.ip_address || 'Unknown IP'} · Created {formatDate(session.created_at)}
-                            </p>
-                            <p className="text-xs text-text-muted">
-                              Expires {formatDate(session.expires_at)}
-                            </p>
+                            <p className="text-xs text-text-muted mt-0.5">{session.ip_address || 'Unknown IP'} · Created {formatDate(session.created_at)}</p>
+                            <p className="text-xs text-text-muted">Expires {formatDate(session.expires_at)}</p>
                           </div>
                         </div>
                         {!session.is_current && (
-                          <button
-                            onClick={() => setRevokeTarget(session)}
-                            className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400"
-                            title="Revoke session"
-                          >
+                          <button onClick={() => setRevokeTarget(session)} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400" title="Revoke session">
                             <Trash2 size={14} />
                           </button>
                         )}
@@ -508,39 +635,102 @@ export default function ProfilePage() {
             )}
           </div>
         )}
+
+        {activeTab === 'activity' && (
+          <div className="space-y-4">
+            ...(activity content as shown above)...
+          </div>
+        )}
+
+        {activeTab === 'apiKeys' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-text-secondary">Manage your API keys for programmatic access.</p>
+              <button onClick={fetchApiKeys} disabled={isApiKeysLoading} className="btn-secondary text-sm">
+                <RefreshCw size={14} className={isApiKeysLoading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+            </div>
+
+            {createdKey && (
+              <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <Check size={16} className="text-green-400" />
+                  <span className="text-sm font-medium text-green-400">API Key Created</span>
+                </div>
+                <p className="text-xs text-text-muted mb-2">Copy this key now. You won't be able to see it again.</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-bg-primary rounded-lg px-3 py-2 text-xs font-mono break-all select-all">{createdKey}</code>
+                  <button onClick={() => { copyToClipboard(createdKey); setCreatedKey(null); }} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary">
+                    <Copy size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button onClick={() => setShowCreateKey(!showCreateKey)} className="btn-primary text-sm">
+                <Plus size={14} /> Create API Key
+              </button>
+            </div>
+
+            {showCreateKey && (
+              <div className="p-4 bg-bg-primary rounded-xl border border-border space-y-3">
+                <FormInput label="Key Name" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="e.g. CI/CD Pipeline" />
+                <FormInput label="Scopes (comma-separated)" value={newKeyScopes} onChange={(e) => setNewKeyScopes(e.target.value)} placeholder="reports:read, cases:read" />
+                <div className="flex gap-2">
+                  <button onClick={handleCreateApiKey} disabled={!newKeyName} className="btn-primary text-sm">Create</button>
+                  <button onClick={() => setShowCreateKey(false)} className="btn-secondary text-sm">Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {isApiKeysLoading ? (
+              <div className="text-center py-8"><Loader2 className="animate-spin mx-auto mb-2 text-text-muted" size={24} /><p className="text-sm text-text-muted">Loading API keys...</p></div>
+            ) : apiKeys.length === 0 ? (
+              <div className="text-center py-8"><Code size={32} className="mx-auto mb-2 text-text-muted" /><p className="text-sm text-text-muted">No API keys created yet</p></div>
+            ) : (
+              <div className="space-y-3">
+                {apiKeys.map((key) => (
+                  <div key={key.id} className={`p-4 rounded-xl border ${key.is_active ? 'border-border bg-bg-primary' : 'border-red-500/30 bg-red-500/5'}`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Code size={16} className="text-text-muted" />
+                          <span className="text-sm font-medium">{key.name}</span>
+                          {!key.is_active && <span className="badge bg-red-500/20 text-red-400 text-[10px]">Revoked</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(key.scopes || []).map((s) => (
+                            <span key={s} className="badge bg-bg-tertiary text-text-muted text-[10px]">{s}</span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-text-muted mt-1">
+                          Created {formatDate(key.created_at)}
+                          {key.last_used_at && ` · Last used ${formatDate(key.last_used_at)}`}
+                          {key.expires_at && ` · Expires ${formatDate(key.expires_at)}`}
+                        </p>
+                      </div>
+                      {key.is_active && (
+                        <button onClick={() => handleRevokeApiKey(key.id)} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400" title="Revoke key">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Confirm Dialogs */}
-      <ConfirmDialog
-        isOpen={showDisableConfirm}
-        onClose={() => setShowDisableConfirm(false)}
-        onConfirm={handleDisable2FA}
-        title="Disable Two-Factor Authentication"
-        message="Are you sure you want to disable 2FA? Your account will be less secure."
-        confirmLabel="Disable 2FA"
-        variant="danger"
-        isLoading={is2faLoading}
-      />
-
-      <ConfirmDialog
-        isOpen={!!revokeTarget}
-        onClose={() => setRevokeTarget(null)}
-        onConfirm={() => revokeTarget && handleRevokeSession(revokeTarget.id)}
-        title="Revoke Session"
-        message={`Revoke session from ${revokeTarget?.ip_address || 'unknown IP'} (${parseBrowser(revokeTarget?.user_agent || null)})?`}
-        confirmLabel="Revoke"
-        variant="danger"
-      />
-
-      <ConfirmDialog
-        isOpen={showRevokeAllConfirm}
-        onClose={() => setShowRevokeAllConfirm(false)}
-        onConfirm={handleRevokeAllSessions}
-        title="Revoke All Other Sessions"
-        message="This will sign out all your other active sessions. Your current session will remain active."
-        confirmLabel="Revoke All Others"
-        variant="danger"
-      />
+      <ConfirmDialog isOpen={showDisableConfirm} onClose={() => setShowDisableConfirm(false)} onConfirm={handleDisable2FA}
+        title="Disable Two-Factor Authentication" message="Are you sure you want to disable 2FA? Your account will be less secure." confirmLabel="Disable 2FA" variant="danger" isLoading={is2faLoading} />
+      <ConfirmDialog isOpen={!!revokeTarget} onClose={() => setRevokeTarget(null)} onConfirm={() => revokeTarget && handleRevokeSession(revokeTarget.id)}
+        title="Revoke Session" message={`Revoke session from ${revokeTarget?.ip_address || 'unknown IP'} (${parseBrowser(revokeTarget?.user_agent || null)})?`} confirmLabel="Revoke" variant="danger" />
+      <ConfirmDialog isOpen={showRevokeAllConfirm} onClose={() => setShowRevokeAllConfirm(false)} onConfirm={handleRevokeAllSessions}
+        title="Revoke All Other Sessions" message="This will sign out all your other active sessions. Your current session will remain active." confirmLabel="Revoke All Others" variant="danger" />
     </div>
   );
 }

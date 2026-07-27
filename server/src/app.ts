@@ -13,6 +13,8 @@ import { createWebSocketServer, getIO } from './websocket';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import { authenticate } from './middleware/auth';
 import { generalLimiter } from './middleware/rate-limiter';
+import { maintenanceGuard } from './middleware/maintenance';
+import { apiKeyAuth } from './middleware/api-key-auth';
 
 export async function createApp() {
   const app = express();
@@ -40,6 +42,12 @@ export async function createApp() {
 
   // Apply general rate limiter to all API routes (100 req/min per IP)
   app.use('/api', generalLimiter);
+
+  // API key authentication (before JWT auth)
+  app.use('/api', apiKeyAuth);
+
+  // Maintenance mode guard (after API key auth so admin API keys work)
+  app.use(maintenanceGuard);
 
   // Mount all module routers
   for (const mod of moduleRegistry.getAll()) {

@@ -175,4 +175,71 @@ router.delete('/:id/attachments/:aid', async (req: Request, res: Response, next:
   } catch (e) { next(e); }
 });
 
+// ── Export to Slides ──
+
+router.post('/:id/export', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const briefing = await db('briefings')
+      .select('briefings.*', 'users.first_name as author_first', 'users.last_name as author_last')
+      .leftJoin('users', 'briefings.prepared_by', 'users.id')
+      .where('briefings.id', req.params.id)
+      .first();
+
+    if (!briefing) { res.status(404).json({ error: 'Briefing not found' }); return; }
+
+    const content = typeof briefing.content === 'string' ? JSON.parse(briefing.content || '{}') : (briefing.content || {});
+    const slides: string[] = content.slides || content.sections || [];
+
+    let slidesHtml = '';
+    const totalSlides = Array.isArray(slides) ? slides.length : 0;
+    if (Array.isArray(slides)) {
+      slides.forEach((slide: any, i: number) => {
+        const title = typeof slide === 'string' ? slide : (slide.title || `Slide ${i + 1}`);
+        const body = typeof slide === 'string' ? '' : (slide.body || slide.content || '');
+        slidesHtml += `<section class="slide">
+          <h2>${title}</h2>
+          <div class="slide-body">${body}</div>
+          <div class="page-num">${i + 1} / ${totalSlides}</div>
+        </section>`;
+      });
+    }
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${briefing.title}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #eee; }
+  .title-slide { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, #16213e, #0f3460); page-break-after: always; }
+  .title-slide h1 { font-size: 48px; margin-bottom: 20px; color: #e94560; text-align: center; padding: 0 40px; }
+  .title-slide .subtitle { font-size: 20px; color: #a0a0b0; margin-bottom: 40px; }
+  .title-slide .meta { font-size: 14px; color: #606080; }
+  .slide { height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 60px 80px; page-break-after: always; background: #1a1a2e; }
+  .slide h2 { font-size: 36px; color: #e94560; margin-bottom: 30px; border-bottom: 3px solid #0f3460; padding-bottom: 12px; }
+  .slide-body { font-size: 22px; line-height: 1.8; color: #d0d0e0; flex: 1; }
+  .page-num { font-size: 14px; color: #606080; text-align: right; margin-top: 20px; }
+  .classification-strip { background: #e94560; color: #fff; text-align: center; padding: 6px; font-size: 12px; font-weight: bold; letter-spacing: 2px; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .slide, .title-slide { page-break-after: always; }
+  }
+</style></head><body>
+  <div class="classification-strip">${briefing.classification}</div>
+  <section class="title-slide">
+    <h1>${briefing.title}</h1>
+    <div class="subtitle">${briefing.reference_number}</div>
+    <div class="meta">
+      Prepared by: ${[briefing.author_first, briefing.author_last].filter(Boolean).join(' ') || 'N/A'}<br>
+      Status: ${briefing.status}<br>
+      Date: ${new Date().toLocaleDateString()}
+    </div>
+  </section>
+  ${slidesHtml}
+</body></html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `attachment; filename="briefing-${briefing.reference_number}.html"`);
+    res.send(html);
+  } catch (e) { next(e); }
+});
+
 export default router;

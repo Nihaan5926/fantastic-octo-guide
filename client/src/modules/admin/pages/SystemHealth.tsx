@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Database, Server, Cpu, Clock, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Activity, Database, Server, Cpu, Clock, AlertTriangle, CheckCircle, RefreshCw, Wrench, Loader2 } from 'lucide-react';
 import { CardSkeleton } from '../../../components/common/LoadingSkeleton';
+import toast from 'react-hot-toast';
 import api from '../../../api/client';
 
 interface HealthData {
@@ -8,12 +9,14 @@ interface HealthData {
   uptime: number;
   memory: { heapUsed: number; heapTotal: number; rss: number };
   modules: number;
+  maintenanceMode: boolean;
 }
 
 export default function SystemHealth() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [togglingMaintenance, setTogglingMaintenance] = useState(false);
 
   const fetchHealth = async () => {
     setIsLoading(true);
@@ -29,6 +32,19 @@ export default function SystemHealth() {
   };
 
   useEffect(() => { fetchHealth(); }, []);
+
+  const handleToggleMaintenance = async () => {
+    setTogglingMaintenance(true);
+    try {
+      const { data } = await api.post('/admin/maintenance/toggle');
+      setHealth((prev) => prev ? { ...prev, maintenanceMode: data.maintenanceMode } : prev);
+      toast.success(data.maintenanceMode ? 'Maintenance mode enabled' : 'Maintenance mode disabled');
+    } catch {
+      toast.error('Failed to toggle maintenance mode');
+    } finally {
+      setTogglingMaintenance(false);
+    }
+  };
 
   const formatUptime = (seconds: number) => {
     const d = Math.floor(seconds / 86400);
@@ -184,6 +200,41 @@ export default function SystemHealth() {
             <span className="text-sm font-medium">{health!.modules}</span>
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Wrench size={18} />
+          Maintenance Control
+        </h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Maintenance Mode</p>
+            <p className="text-xs text-text-muted mt-1">
+              When enabled, only administrators can access the platform. All other users see a maintenance page.
+            </p>
+          </div>
+          <button
+            onClick={handleToggleMaintenance}
+            disabled={togglingMaintenance}
+            className={`btn-primary ${health!.maintenanceMode ? 'bg-accent-danger hover:bg-accent-danger/80' : ''}`}
+          >
+            {togglingMaintenance ? (
+              <Loader2 className="animate-spin" size={16} />
+            ) : (
+              <Wrench size={16} />
+            )}
+            {health!.maintenanceMode ? 'Disable Maintenance' : 'Enable Maintenance'}
+          </button>
+        </div>
+        {health!.maintenanceMode && (
+          <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-start gap-2">
+            <AlertTriangle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-yellow-400">
+              Maintenance mode is currently active. Non-admin users cannot access the system.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

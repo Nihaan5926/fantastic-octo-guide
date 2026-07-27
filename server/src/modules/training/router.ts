@@ -92,6 +92,41 @@ router.delete('/courses/:id', async (req: Request, res: Response, next: NextFunc
   } catch (e) { next(e); }
 });
 
+// ── Prerequisites ────────────────────────────────────────────────────────────
+
+router.get('/courses/:id/prerequisites', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const prerequisites = await db('course_prerequisites')
+      .select('course_prerequisites.*', 'tc.title as prerequisite_title', 'tc.description as prerequisite_description')
+      .leftJoin('training_courses as tc', 'course_prerequisites.prerequisite_course_id', 'tc.id')
+      .where('course_prerequisites.course_id', req.params.id);
+
+    res.json({ data: prerequisites });
+  } catch (e) { next(e); }
+});
+
+router.post('/courses/:id/prerequisites', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { prerequisite_course_id } = req.body;
+    const [item] = await db('course_prerequisites').insert({
+      id: uuid(),
+      course_id: req.params.id,
+      prerequisite_course_id,
+    }).returning('*');
+    res.status(201).json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/courses/:id/prerequisites/:prereqId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('course_prerequisites').where({
+      id: req.params.prereqId,
+      course_id: req.params.id,
+    }).del();
+    res.json({ message: 'Prerequisite removed' });
+  } catch (e) { next(e); }
+});
+
 // ── Enrollments ──────────────────────────────────────────────────────────────
 
 router.get('/enrollments', async (req: Request, res: Response, next: NextFunction) => {

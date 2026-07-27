@@ -8,6 +8,7 @@ export const adminApi = {
   updateUser: (id: string, data: any) => api.put(`/admin/users/${id}`, data).then((r) => r.data),
   deleteUser: (id: string) => api.delete(`/admin/users/${id}`).then((r) => r.data),
   permanentDeleteUser: (id: string) => api.delete(`/admin/users/${id}/permanent`).then((r) => r.data),
+  reactivateUser: (id: string) => api.post(`/admin/users/${id}/reactivate`).then((r) => r.data),
 
   // User sessions (admin)
   getUserSessions: (userId: string) => api.get(`/admin/users/${userId}/sessions`).then((r) => r.data),
@@ -25,4 +26,15 @@ export const adminApi = {
 
   // Stats
   getStats: () => api.get('/admin/stats').then((r) => r.data),
+
+  // Announcements
+  listAnnouncements: () => api.get('/admin/announcements').then((r) => r.data),
+  createAnnouncement: (data: any) => api.post('/admin/announcements', data).then((r) => r.data),
+  updateAnnouncement: (id: string, data: any) => api.put(`/admin/announcements/${id}`, data).then((r) => r.data),
+  deleteAnnouncement: (id: string) => api.delete(`/admin/announcements/${id}`).then((r) => r.data),
+
+  // API Keys
+  listApiKeys: () => api.get('/admin/api-keys').then((r) => r.data),
+  createApiKey: (data: any) => api.post('/admin/api-keys', data).then((r) => r.data),
+  deleteApiKey: (id: string) => api.delete(`/admin/api-keys/${id}`).then((r) => r.data),
 };

@@ -103,7 +103,9 @@ export default function EvidenceList() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [form, setForm] = useState<EvidenceForm>(emptyForm);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadProgresses, setUploadProgresses] = useState<number[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -141,7 +143,9 @@ export default function EvidenceList() {
 
   const openUpload = () => {
     setUploadFile(null);
+    setUploadFiles([]);
     setUploadProgress(0);
+    setUploadProgresses([]);
     setUploadOpen(true);
   };
 
@@ -158,22 +162,17 @@ export default function EvidenceList() {
   };
 
   const handleFileUpload = async () => {
-    if (!uploadFile) return;
+    const allFiles = uploadFiles.length > 0 ? uploadFiles : (uploadFile ? [uploadFile] : []);
+    if (allFiles.length === 0) return;
     setIsUploading(true);
+    setUploadProgresses(new Array(allFiles.length).fill(0));
     setUploadProgress(0);
-
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 90) { clearInterval(progressInterval); return prev; }
-        return prev + Math.random() * 15;
-      });
-    }, 200);
 
     try {
       const fd = new FormData();
-      fd.append('file', uploadFile);
+      allFiles.forEach((f) => fd.append('files', f));
       fd.append('type', form.type);
-      fd.append('title', form.title || uploadFile.name);
+      fd.append('title', form.title || '');
       fd.append('description', form.description);
       fd.append('classification', form.classification);
       if (form.case_id) fd.append('caseId', form.case_id);
@@ -181,18 +180,18 @@ export default function EvidenceList() {
 
       await createWithFile(fd);
 
-      clearInterval(progressInterval);
       setUploadProgress(100);
-      toast.success('File uploaded successfully');
+      toast.success(`${allFiles.length} file(s) uploaded successfully`);
       setUploadOpen(false);
       setUploadFile(null);
+      setUploadFiles([]);
       fetchList({ page, search, type: typeFilter, classification: classificationFilter });
     } catch {
-      clearInterval(progressInterval);
       toast.error('Upload failed');
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      setUploadProgresses([]);
     }
   };
 
@@ -654,14 +653,31 @@ export default function EvidenceList() {
         </form>
       </Modal>
 
-      <Modal isOpen={uploadOpen} onClose={() => { if (!isUploading) { setUploadOpen(false); setUploadFile(null); } }} title="Upload File" size="md">
+      <Modal isOpen={uploadOpen} onClose={() => { if (!isUploading) { setUploadOpen(false); setUploadFile(null); setUploadFiles([]); } }} title="Upload Files" size="md">
         <div className="space-y-4">
           <FileUpload
             selectedFile={uploadFile}
-            onChange={(f) => setUploadFile(f)}
+            onChange={(f) => {
+              setUploadFile(f);
+              if (f && !uploadFiles.includes(f)) setUploadFiles([...uploadFiles, f]);
+            }}
             disabled={isUploading}
             isUploading={isUploading}
           />
+
+          {uploadFiles.length > 1 && (
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              <p className="text-xs text-text-muted">{uploadFiles.length} files selected:</p>
+              {uploadFiles.map((f, i) => (
+                <div key={i} className="flex items-center justify-between text-xs text-text-secondary bg-bg-tertiary rounded px-2 py-1">
+                  <span className="truncate">{f.name}</span>
+                  <button onClick={() => { const updated = uploadFiles.filter((_, j) => j !== i); setUploadFiles(updated); if (updated.length === 0) setUploadFile(null); }} className="ml-2 text-text-muted hover:text-red-400">
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {uploadFile && (
             <div className="space-y-3 pt-2">
@@ -693,9 +709,9 @@ export default function EvidenceList() {
           )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <button type="button" onClick={() => { if (!isUploading) { setUploadOpen(false); setUploadFile(null); } }} className="btn-secondary" disabled={isUploading}>Cancel</button>
-            <button type="button" onClick={handleFileUpload} disabled={!uploadFile || isUploading} className="btn-primary">
-              {isUploading ? 'Uploading...' : 'Upload'}
+            <button type="button" onClick={() => { if (!isUploading) { setUploadOpen(false); setUploadFile(null); setUploadFiles([]); } }} className="btn-secondary" disabled={isUploading}>Cancel</button>
+            <button type="button" onClick={handleFileUpload} disabled={(uploadFiles.length === 0 && !uploadFile) || isUploading} className="btn-primary">
+              {isUploading ? 'Uploading...' : `Upload ${uploadFiles.length > 1 ? uploadFiles.length + ' files' : ''}`}
             </button>
           </div>
         </div>

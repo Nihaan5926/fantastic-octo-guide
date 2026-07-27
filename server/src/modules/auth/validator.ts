@@ -41,6 +41,10 @@ export const login2faSchema = z.object({
   totpCode: z.string().length(6),
 });
 
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TotpTokenInput = z.infer<typeof totpTokenSchema>;

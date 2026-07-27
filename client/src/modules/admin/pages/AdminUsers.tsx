@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Edit, Shield, UserCheck, UserX, RefreshCw, Loader2, Search, Download, ChevronDown, Monitor, Loader } from 'lucide-react';
+import { Plus, Trash2, Edit, Shield, UserCheck, UserX, RefreshCw, Loader2, Search, Download, ChevronDown, Monitor, Loader, UserPlus } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { adminApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
@@ -13,7 +13,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { useAdminStore } from '../store';
 
 export default function AdminUsers() {
-  const { users, usersPagination, roles, isLoading, fetchUsers, createUser, updateUser, deleteUser, permanentDeleteUser, fetchRoles, createRole, updateRole, deleteRole } = useAdminStore();
+  const { users, usersPagination, roles, isLoading, fetchUsers, createUser, updateUser, deleteUser, permanentDeleteUser, reactivateUser, fetchRoles, createRole, updateRole, deleteRole } = useAdminStore();
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -183,7 +183,11 @@ export default function AdminUsers() {
       <div className="flex gap-1">
         <button onClick={(e) => { e.stopPropagation(); openSessions(u); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary" title="Sessions"><Monitor size={14} /></button>
         <button onClick={(e) => { e.stopPropagation(); openEditUser(u); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary"><Edit size={14} /></button>
-        <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400" title="Deactivate"><UserX size={14} /></button>
+        {!u.is_active ? (
+          <button onClick={async (e) => { e.stopPropagation(); await reactivateUser(u.id); fetchUsers(); toast.success('User reactivated'); }} className="p-1.5 rounded-lg hover:bg-green-500/20 text-green-400" title="Reactivate"><UserPlus size={14} /></button>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400" title="Deactivate"><UserX size={14} /></button>
+        )}
         <button onClick={(e) => { e.stopPropagation(); setPermDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-700/30 text-red-500" title="Delete permanently"><Trash2 size={14} /></button>
       </div>
     )},
