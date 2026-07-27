@@ -3,7 +3,7 @@ import { Knex } from 'knex';
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('shift_schedules', (t) => {
     t.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    t.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+    t.uuid('user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
     t.string('shift_name', 100).nullable();
     t.time('start_time').nullable();
     t.time('end_time').nullable();
