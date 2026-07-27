@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import crypto from 'crypto';
 
 // Load .env only if it exists (skip in Docker where env vars are injected)
 dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: false });
@@ -11,6 +12,10 @@ const required = (key: string, fallback: string): string => {
   }
   return val;
 };
+
+// Auto-generated deploy salt — changes on every server restart, invalidating all tokens
+const DEPLOY_SALT = process.env.DEPLOY_SALT || crypto.randomBytes(16).toString('hex');
+console.log(`[Config] Deploy salt: ${DEPLOY_SALT.substring(0, 8)}...`);
 
 export const config = {
   env: process.env.NODE_ENV || 'development',
@@ -25,8 +30,8 @@ export const config = {
   },
 
   jwt: {
-    accessSecret: required('JWT_ACCESS_SECRET', process.env.NODE_ENV === 'production' ? '' : 'dev-access-secret'),
-    refreshSecret: required('JWT_REFRESH_SECRET', process.env.NODE_ENV === 'production' ? '' : 'dev-refresh-secret'),
+    accessSecret: required('JWT_ACCESS_SECRET', process.env.NODE_ENV === 'production' ? '' : 'dev-access-secret') + DEPLOY_SALT,
+    refreshSecret: required('JWT_REFRESH_SECRET', process.env.NODE_ENV === 'production' ? '' : 'dev-refresh-secret') + DEPLOY_SALT,
     accessExpires: process.env.JWT_ACCESS_EXPIRES || '15m',
     refreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
   },
@@ -39,6 +44,9 @@ export const config = {
     dir: path.resolve(__dirname, '..', process.env.UPLOAD_DIR || './uploads'),
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800', 10),
   },
+
+  deploySalt: DEPLOY_SALT,
+  buildTime: process.env.BUILD_TIME || new Date().toISOString(),
 
   maintenanceMode: process.env.MAINTENANCE_MODE === 'true',
 };

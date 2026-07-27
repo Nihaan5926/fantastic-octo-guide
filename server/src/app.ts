@@ -77,11 +77,14 @@ export async function createApp() {
     });
   });
 
-  // Health check
+  // Health check with deploy version for cache busting
   app.get('/api/health', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
+      deploySalt: config.deploySalt.substring(0, 8),
+      buildTime: config.buildTime,
       db: 'connected',
       uptime: process.uptime(),
       memory: {
@@ -93,9 +96,19 @@ export async function createApp() {
     });
   });
 
+  // Deploy version endpoint for cache bust detection
+  app.get('/api/deploy-version', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ deploySalt: config.deploySalt.substring(0, 8), buildTime: config.buildTime });
+  });
+
   // SPA fallback — serve index.html for all non-API routes
+  // Add cache busting: set no-cache on HTML so browser always checks for updates
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     res.sendFile(path.resolve(clientDist, 'index.html'));
   });
 
