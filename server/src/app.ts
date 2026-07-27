@@ -11,6 +11,7 @@ import { moduleRegistry } from './core/module-registry';
 import { eventBus } from './core/event-bus';
 import { createWebSocketServer, getIO } from './websocket';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
+import { bootstrapDatabase } from './db/bootstrap';
 import { authenticate } from './middleware/auth';
 import { generalLimiter } from './middleware/rate-limiter';
 import { maintenanceGuard } from './middleware/maintenance';
@@ -36,6 +37,9 @@ export async function createApp() {
   const io = createWebSocketServer(server);
 
   await testConnection();
+
+  // Ensure ALL tables and columns exist before loading modules
+  await bootstrapDatabase(db);
 
   const moduleDir = path.resolve(__dirname, 'modules');
   await moduleRegistry.loadAll(moduleDir, { db, io, eventBus });
