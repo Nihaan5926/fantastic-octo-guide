@@ -44,7 +44,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken)
-      localStorage.setItem('loginTime', String(Date.now()));;
       localStorage.setItem('loginTime', String(Date.now()));
       set({ user: data.user, isAuthenticated: true, isLoading: false, requires2FA: false, tempToken: null });
     } catch (err: any) {
@@ -61,7 +60,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data } = await api.post('/auth/login-2fa', { tempToken, totpCode });
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken)
-      localStorage.setItem('loginTime', String(Date.now()));;
+      localStorage.setItem('loginTime', String(Date.now()));
       set({
         user: data.user,
         isAuthenticated: true,
@@ -83,7 +82,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data: res } = await api.post('/auth/register', data);
       localStorage.setItem('accessToken', res.accessToken);
       localStorage.setItem('refreshToken', res.refreshToken)
-      localStorage.setItem('loginTime', String(Date.now()));;
+      localStorage.setItem('loginTime', String(Date.now()));
       set({ user: res.user, isAuthenticated: true, isLoading: false });
     } catch (err: any) {
       const message = err.response?.data?.error || 'Registration failed';

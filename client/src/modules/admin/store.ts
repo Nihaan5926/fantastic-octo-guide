@@ -51,7 +51,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
   reactivateUser: async (id) => { await adminApi.reactivateUser(id); set((s) => ({ users: s.users.map((u) => u.id === id ? { ...u, is_active: true } : u) })); },
 
   fetchRoles: async () => {
-    try { const d = await adminApi.listRoles(); set({ roles: d.data }); } catch {}
+    try { const d = await adminApi.listRoles(); set({ roles: d.data }); } catch { set({ error: 'Operation failed' }); }
   },
   createRole: async (data) => { await adminApi.createRole(data); await get().fetchRoles(); },
   updateRole: async (id, data) => { await adminApi.updateRole(id, data); await get().fetchRoles(); },
@@ -63,6 +63,6 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
     catch (e: any) { set({ error: e.message, isLoading: false }); }
   },
   fetchStats: async () => {
-    try { const d = await adminApi.getStats(); set({ stats: d }); } catch {}
+    try { const d = await adminApi.getStats(); set({ stats: d }); } catch { set({ error: 'Operation failed' }); }
   },
 }));

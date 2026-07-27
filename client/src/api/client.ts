@@ -17,6 +17,10 @@ let isRefreshing = false;
 let redirecting = false;
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
 
+// Queued requests are resolved silently after a successful token refresh
+// so they can retry with the new token. The reject no-op is intentional:
+// we don't want queued requests to individually error out during refresh.
+
 function processQueue(error: any, token: string | null) {
   failedQueue.forEach((p) => {
     if (error) p.reject(error);
@@ -85,6 +89,7 @@ api.interceptors.response.use(
           localStorage.setItem('loginTime', String(Date.now()));
           processQueue(null, data.accessToken);
           isRefreshing = false;
+          redirecting = false;
           original.headers.Authorization = `Bearer ${data.accessToken}`;
           return api(original);
         } catch {

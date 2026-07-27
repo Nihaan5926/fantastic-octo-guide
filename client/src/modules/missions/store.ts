@@ -51,7 +51,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     } catch (e: any) { set({ error: e.message, isLoading: false }); }
   },
   fetchPlan: async (id) => {
-    try { const data = await missionPlansApi.get(id); set({ selectedPlan: data }); } catch {}
+    try { const data = await missionPlansApi.get(id); set({ selectedPlan: data }); } catch { set({ error: 'Operation failed' }); }
   },
   createPlan: async (data) => {
     await missionPlansApi.create(data);
@@ -69,7 +69,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   setSearch: (s) => set({ search: s }),
 
   fetchBriefs: async (planId) => {
-    try { const data = await missionBriefsApi.list(planId); set({ briefs: data.data }); } catch {}
+    try { const data = await missionBriefsApi.list(planId); set({ briefs: data.data }); } catch { set({ error: 'Operation failed' }); }
   },
   createBrief: async (planId, data) => {
     await missionBriefsApi.create(planId, data);
@@ -84,7 +84,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     set((s) => ({ briefs: s.briefs.filter((b) => b.id !== id) }));
   },
   fetchDebriefs: async (planId) => {
-    try { const data = await missionDebriefsApi.list(planId); set({ debriefs: data.data }); } catch {}
+    try { const data = await missionDebriefsApi.list(planId); set({ debriefs: data.data }); } catch { set({ error: 'Operation failed' }); }
   },
   createDebrief: async (planId, data) => {
     await missionDebriefsApi.create(planId, data);

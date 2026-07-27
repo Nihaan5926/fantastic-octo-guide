@@ -123,21 +123,21 @@ export const useBriefingStore = create<BriefingState>((set, get) => ({
     try {
       const { data } = await (await import('./api')).briefingsApi.listDistributions(briefingId);
       set({ distributions: data.data || data });
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   addDistribution: async (briefingId, distData) => {
     try {
       await (await import('./api')).briefingsApi.addDistribution(briefingId, distData);
       await get().fetchDistributions(briefingId);
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   removeDistribution: async (briefingId, distributionId) => {
     try {
       await (await import('./api')).briefingsApi.removeDistribution(briefingId, distributionId);
       await get().fetchDistributions(briefingId);
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   setPage: (page: number) => {

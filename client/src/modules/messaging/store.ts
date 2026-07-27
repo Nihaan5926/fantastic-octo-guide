@@ -98,7 +98,7 @@ export const useMessagingStore = create<MessagingState>((set, get) => ({
     try {
       const { data } = await (await import('./api')).messagingApi.getChannel(id);
       set({ selectedChannel: data });
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   createChannel: async (channelData) => {
@@ -168,34 +168,34 @@ export const useMessagingStore = create<MessagingState>((set, get) => ({
     try {
       await (await import('./api')).messagingApi.deleteMessage(messageId);
       await get().fetchMessages(channelId);
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   markAsRead: async (messageId) => {
     try {
       await (await import('./api')).messagingApi.updateMessage(messageId, { is_read: true });
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   fetchMembers: async (channelId) => {
     try {
       const { data } = await (await import('./api')).messagingApi.listMembers(channelId);
       set({ members: data.data || data });
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   addMember: async (channelId, memberData) => {
     try {
       await (await import('./api')).messagingApi.addMember(channelId, memberData);
       await get().fetchMembers(channelId);
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   removeMember: async (channelId, memberId) => {
     try {
       await (await import('./api')).messagingApi.removeMember(channelId, memberId);
       await get().fetchMembers(channelId);
-    } catch {}
+    } catch { set({ error: 'Operation failed' }); }
   },
 
   selectChannel: (channel) => {

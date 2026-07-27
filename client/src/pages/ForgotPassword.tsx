@@ -13,7 +13,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
     try {
       await api.post('/auth/forgot-password', { email });
-    } catch {}
+    } catch { /* Always show "check email" for security — don't reveal if email exists */ }
     setSubmitted(true);
     setIsLoading(false);
   };
