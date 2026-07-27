@@ -218,3 +218,27 @@ export async function bootstrapDatabase(db: knex.Knex) {
 
   console.log('[Bootstrap] Database schema check complete.');
 }
+
+// Allow running standalone: node dist/db/bootstrap.js
+if (require.main === module) {
+  const knex = require('knex');
+  const db = knex({
+    client: 'pg',
+    connection: {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      user: process.env.DB_USER || 'intel_admin',
+      password: process.env.DB_PASSWORD || 'intel_secret_dev',
+      database: process.env.DB_NAME || 'intel_platform',
+    },
+  });
+  bootstrapDatabase(db).then(() => {
+    console.log('[Bootstrap] Done.');
+    db.destroy();
+    process.exit(0);
+  }).catch((e: any) => {
+    console.error('[Bootstrap] Fatal:', e.message);
+    db.destroy();
+    process.exit(1);
+  });
+}

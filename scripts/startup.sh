@@ -25,7 +25,11 @@ until node -e "
 done
 
 echo "[Startup] Running database migrations..."
-node dist/db/migrate.js up
+node dist/db/migrate.js up || echo "[Startup] Migrations completed with some failures — continuing..."
+
+# Run recovery bootstrap to ensure ALL tables exist (idempotent)
+echo "[Startup] Running schema recovery..."
+node dist/db/bootstrap.js || echo "[Startup] Schema recovery had issues — continuing anyway..."
 
 echo "[Startup] Running first-run seed (admin user)..."
 node dist/db/seed-minimal.js

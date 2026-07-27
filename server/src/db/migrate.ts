@@ -56,8 +56,13 @@ async function runMigrations(direction: 'up' | 'down' = 'up') {
         console.log(`  [skip] ${name}`);
         continue;
       }
-      await mig.up(db);
-      console.log(`  [ok]   ${name}`);
+      try {
+        await mig.up(db);
+        console.log(`  [ok]   ${name}`);
+      } catch (e: any) {
+        console.log(`  [FAIL] ${name}: ${e.message}`);
+        // Continue to next migration — don't stop the whole process
+      }
     }
   } else {
     // Rollback: reverse order, skip polymorphic migration tables if roles/users still exist
