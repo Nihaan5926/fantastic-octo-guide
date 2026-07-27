@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -63,6 +64,12 @@ router.post('/requirements', async (req: Request, res: Response, next: NextFunct
       requester_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'collection_requirement',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New requirement',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -72,6 +79,12 @@ router.put('/requirements/:id', async (req: Request, res: Response, next: NextFu
     const [item] = await db('collection_requirements')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Collection requirement not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'collection_requirement',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated requirement',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -79,6 +92,12 @@ router.put('/requirements/:id', async (req: Request, res: Response, next: NextFu
 router.delete('/requirements/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('collection_requirements').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'collection_requirement',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -136,6 +155,12 @@ router.post('/assets', async (req: Request, res: Response, next: NextFunction) =
       id: uuid(),
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'collection_asset',
+      entityId: item.id,
+      title: item.name || 'New asset',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -145,6 +170,12 @@ router.put('/assets/:id', async (req: Request, res: Response, next: NextFunction
     const [item] = await db('collection_assets')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Collection asset not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'collection_asset',
+      entityId: item.id,
+      title: item.name || 'Updated asset',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -152,6 +183,12 @@ router.put('/assets/:id', async (req: Request, res: Response, next: NextFunction
 router.delete('/assets/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('collection_assets').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'collection_asset',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

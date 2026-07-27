@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -54,6 +55,12 @@ router.post('/features', async (req: Request, res: Response, next: NextFunction)
       analyst_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'geoint_feature',
+      entityId: item.id,
+      title: item.title || 'New feature',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -63,6 +70,12 @@ router.put('/features/:id', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('geoint_features')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Feature not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'geoint_feature',
+      entityId: item.id,
+      title: item.title || 'Updated feature',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -70,6 +83,12 @@ router.put('/features/:id', async (req: Request, res: Response, next: NextFuncti
 router.delete('/features/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('geoint_features').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'geoint_feature',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -107,6 +126,12 @@ router.post('/features/:id/annotations', async (req: Request, res: Response, nex
       author_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'geoint_annotation',
+      entityId: item.id,
+      title: item.text || 'New annotation',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -116,6 +141,12 @@ router.put('/annotations/:id', async (req: Request, res: Response, next: NextFun
     const [item] = await db('geoint_annotations')
       .where({ id: req.params.id }).update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Annotation not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'geoint_annotation',
+      entityId: item.id,
+      title: item.text || 'Updated annotation',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -123,6 +154,12 @@ router.put('/annotations/:id', async (req: Request, res: Response, next: NextFun
 router.delete('/annotations/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('geoint_annotations').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'geoint_annotation',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

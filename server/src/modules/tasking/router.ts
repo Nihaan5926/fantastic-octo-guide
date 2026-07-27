@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -67,6 +68,12 @@ router.post('/assignments', async (req: Request, res: Response, next: NextFuncti
       assigned_by: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'tasking_assignment',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New assignment',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -76,6 +83,12 @@ router.put('/assignments/:id', async (req: Request, res: Response, next: NextFun
     const [item] = await db('tasking_assignments')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Tasking assignment not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'tasking_assignment',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated assignment',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -83,6 +96,12 @@ router.put('/assignments/:id', async (req: Request, res: Response, next: NextFun
 router.delete('/assignments/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('tasking_assignments').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'tasking_assignment',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -129,6 +148,12 @@ router.post('/workflows', async (req: Request, res: Response, next: NextFunction
       id: uuid(),
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'tasking_workflow',
+      entityId: item.id,
+      title: item.name || 'New workflow',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -138,6 +163,12 @@ router.put('/workflows/:id', async (req: Request, res: Response, next: NextFunct
     const [item] = await db('tasking_workflows')
       .where({ id: req.params.id }).update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Workflow not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'tasking_workflow',
+      entityId: item.id,
+      title: item.name || 'Updated workflow',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -145,6 +176,12 @@ router.put('/workflows/:id', async (req: Request, res: Response, next: NextFunct
 router.delete('/workflows/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('tasking_workflows').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'tasking_workflow',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

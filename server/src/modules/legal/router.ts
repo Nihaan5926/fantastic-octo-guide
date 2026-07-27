@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -68,6 +69,12 @@ router.post('/reviews', async (req: Request, res: Response, next: NextFunction) 
       ...req.body,
       requested_by: req.user!.userId,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'legal_review',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New review',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -77,6 +84,12 @@ router.put('/reviews/:id', async (req: Request, res: Response, next: NextFunctio
     const [item] = await db('legal_reviews').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Review not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'legal_review',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated review',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -84,6 +97,12 @@ router.put('/reviews/:id', async (req: Request, res: Response, next: NextFunctio
 router.delete('/reviews/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('legal_reviews').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'legal_review',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -131,6 +150,12 @@ router.post('/compliance', async (req: Request, res: Response, next: NextFunctio
     const [item] = await db('compliance_checks').insert({
       id: uuid(), checked_by: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'compliance_check',
+      entityId: item.id,
+      title: item.title || 'New compliance check',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -140,6 +165,12 @@ router.put('/compliance/:id', async (req: Request, res: Response, next: NextFunc
     const [item] = await db('compliance_checks').where({ id: req.params.id })
       .update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Compliance check not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'compliance_check',
+      entityId: item.id,
+      title: item.title || 'Updated compliance check',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -147,6 +178,12 @@ router.put('/compliance/:id', async (req: Request, res: Response, next: NextFunc
 router.delete('/compliance/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('compliance_checks').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'compliance_check',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

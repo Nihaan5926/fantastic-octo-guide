@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Pencil, Trash2, Plus, GraduationCap, ClipboardList, FileText, User, TrendingUp, Users, BookOpen } from 'lucide-react';
+import { Pencil, Trash2, Plus, GraduationCap, ClipboardList, FileText, User, TrendingUp, Users, BookOpen, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { trainingApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
@@ -85,6 +87,19 @@ export default function TrainingPage() {
   const [aarForm, setAarForm] = useState<Partial<AfterActionReport>>(emptyAAR);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     fetchCourses({ page: coursePage, limit: 20 });
@@ -101,6 +116,60 @@ export default function TrainingPage() {
   const inProgressCount = myTrainings.filter((e: any) => e.status === 'IN_PROGRESS' || e.status === 'ENROLLED').length;
   const completedCount = myTrainings.filter((e: any) => e.status === 'COMPLETED').length;
   const failedCount = myTrainings.filter((e: any) => e.status === 'FAILED').length;
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      let result;
+      let label: string;
+      if (tab === 'courses') {
+        result = await trainingApi.listCourses({ limit: 1000 });
+        label = 'courses';
+      } else if (tab === 'aars') {
+        result = await trainingApi.listAARs({ limit: 1000 });
+        label = 'aars';
+      } else {
+        result = await trainingApi.listEnrollments({ limit: 1000 });
+        label = tab === 'my-training' ? 'my-training' : 'enrollments';
+      }
+      const { data } = result;
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, `training-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      let result;
+      let label: string;
+      if (tab === 'courses') {
+        result = await trainingApi.listCourses({ limit: 1000 });
+        label = 'courses';
+      } else if (tab === 'aars') {
+        result = await trainingApi.listAARs({ limit: 1000 });
+        label = 'aars';
+      } else {
+        result = await trainingApi.listEnrollments({ limit: 1000 });
+        label = tab === 'my-training' ? 'my-training' : 'enrollments';
+      }
+      const { data } = result;
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, `training-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
 
   const handleCreate = () => {
     setEditingId(null);
@@ -289,7 +358,43 @@ export default function TrainingPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Training" subtitle="Manage training courses, enrollments, and after-action reports" />
+      <PageHeader title="Training" subtitle="Manage training courses, enrollments, and after-action reports">
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
+      </PageHeader>
 
       <div className="flex items-center gap-1 bg-bg-card border border-border rounded-xl p-1 w-fit">
         {([

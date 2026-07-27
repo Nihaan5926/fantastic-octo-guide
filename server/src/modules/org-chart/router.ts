@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -91,6 +92,12 @@ router.get('/units/:id', async (req: Request, res: Response, next: NextFunction)
 router.post('/units', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('org_units').insert({ id: uuid(), ...req.body }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'org_unit',
+      entityId: item.id,
+      title: item.name || 'New unit',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -102,6 +109,12 @@ router.put('/units/:id', async (req: Request, res: Response, next: NextFunction)
       .update({ ...req.body, updated_at: db.fn.now() })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'org_unit',
+      entityId: item.id,
+      title: item.name || 'Updated unit',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -109,6 +122,12 @@ router.put('/units/:id', async (req: Request, res: Response, next: NextFunction)
 router.delete('/units/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('org_units').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'org_unit',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -149,6 +168,12 @@ router.post('/assignments', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('personnel_assignments').insert({
       id: uuid(), ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'personnel_assignment',
+      entityId: item.id,
+      title: item.position_title || 'New assignment',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -160,6 +185,12 @@ router.put('/assignments/:id', async (req: Request, res: Response, next: NextFun
       .update({ ...req.body })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'personnel_assignment',
+      entityId: item.id,
+      title: item.position_title || 'Updated assignment',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -167,6 +198,12 @@ router.put('/assignments/:id', async (req: Request, res: Response, next: NextFun
 router.delete('/assignments/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('personnel_assignments').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'personnel_assignment',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

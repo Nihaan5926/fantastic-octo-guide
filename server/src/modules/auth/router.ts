@@ -3,6 +3,7 @@ import * as service from './service';
 import { registerSchema, loginSchema, refreshSchema } from './validator';
 import { authenticate } from '../../middleware/auth';
 import { loginRateLimiter } from '../../middleware/rate-limiter';
+import { eventBus } from '../../core/event-bus';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -22,6 +23,12 @@ function validate(schema: any) {
 router.post('/register', validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await service.register(req.body);
+    eventBus.emit('entity:created', {
+      entityType: 'user',
+      entityId: result.user?.id || '',
+      title: result.user?.email || 'New user',
+      userId: result.user?.id || req.body.email,
+    });
     res.status(201).json(result);
   } catch (e) { next(e); }
 });

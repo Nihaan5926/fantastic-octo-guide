@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Plus, FileText, ClipboardCheck, CheckCircle, Clock, Circle, AlertTriangle, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, ClipboardCheck, CheckCircle, Clock, Circle, AlertTriangle, Edit, Trash2, Download, File, Paperclip } from 'lucide-react';
+import FileUpload from '../../../components/common/FileUpload';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { missionPlansApi } from '../api';
 import Modal from '../../../components/common/Modal';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge, ClassificationBadge, PriorityBadge } from '../../../components/common/Badges';
@@ -21,7 +24,7 @@ const priorityOptions = [
   { value: 'HIGH', label: 'High' }, { value: 'CRITICAL', label: 'Critical' },
 ];
 
-type TabKey = 'info' | 'briefs' | 'debriefs';
+type TabKey = 'info' | 'briefs' | 'debriefs' | 'attachments';
 
 const phases = [
   { key: 'PLANNING', label: 'Planning', step: 0 },
@@ -62,6 +65,12 @@ export default function MissionDetail() {
   const [editDebriefModalOpen, setEditDebriefModalOpen] = useState(false);
   const [editDebriefForm, setEditDebriefForm] = useState<any>({});
   const [editDebriefId, setEditDebriefId] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [attachModalOpen, setAttachModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleteAttachId, setDeleteAttachId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) { fetchPlan(id); fetchBriefs(id); fetchDebriefs(id); }
@@ -70,6 +79,67 @@ export default function MissionDetail() {
   useEffect(() => {
     if (selectedPlan) setEditPlanForm({ ...selectedPlan });
   }, [selectedPlan]);
+
+  const fetchAttachments = async () => {
+    setAttachmentsLoading(true);
+    try {
+      const { data } = await missionPlansApi.listAttachments(id!);
+      setAttachments(data.data || []);
+    } catch { } finally {
+      setAttachmentsLoading(false);
+    }
+  };
+
+  const handleUploadAttachment = async () => {
+    if (!id || !selectedFile) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      await missionPlansApi.uploadAttachment(id, fd);
+      toast.success('Attachment uploaded');
+      setAttachModalOpen(false);
+      setSelectedFile(null);
+      fetchAttachments();
+    } catch {
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async () => {
+    if (!id || !deleteAttachId) return;
+    try {
+      await missionPlansApi.deleteAttachment(id, deleteAttachId);
+      toast.success('Attachment removed');
+      setDeleteAttachId(null);
+      fetchAttachments();
+    } catch {
+      toast.error('Delete failed');
+    }
+  };
+
+  const handleDownloadAttachment = async (attachmentId: string) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`/api/missions/plans/${id}/attachments/${attachmentId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { toast.error('Download failed'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const disposition = res.headers.get('content-disposition');
+      if (disposition) {
+        const match = disposition.match(/filename="?(.+?)"?$/);
+        if (match) a.download = match[1];
+      }
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error('Download failed'); }
+  };
 
   const handleUpdatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,8 +248,8 @@ export default function MissionDetail() {
       </div>
 
       <div className="flex gap-2 border-b border-border">
-        {(['info','briefs','debriefs'] as TabKey[]).map((t) => (
-          <button key={t} onClick={() => setActiveTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === t ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+        {(['info','briefs','debriefs','attachments'] as TabKey[]).map((t) => (
+          <button key={t} onClick={() => { setActiveTab(t); if (t === 'attachments' && attachments.length === 0) fetchAttachments(); }} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === t ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
         ))}
       </div>
 
@@ -388,6 +458,50 @@ export default function MissionDetail() {
         </div>
       )}
 
+      {activeTab === 'attachments' && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Paperclip size={18} /> Attachments
+            </h2>
+            <button onClick={() => { setSelectedFile(null); setAttachModalOpen(true); }} className="btn-primary text-sm">
+              <Plus size={14} /> Add File
+            </button>
+          </div>
+          {attachmentsLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-pulse text-text-muted">Loading attachments...</div>
+            </div>
+          ) : attachments.length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-8">No attachments yet</p>
+          ) : (
+            <div className="space-y-2">
+              {attachments.map((att: any) => (
+                <div key={att.id} className="flex items-center justify-between p-3 bg-bg-primary rounded-lg border border-border">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <File size={16} className="text-text-muted shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{att.original_name}</p>
+                      <p className="text-xs text-text-muted">
+                        {att.mime_type} {att.size ? `· ${att.size > 1048576 ? `${(att.size / 1048576).toFixed(1)} MB` : `${(att.size / 1024).toFixed(1)} KB`}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => handleDownloadAttachment(att.id)} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-accent" title="Download">
+                      <Download size={14} />
+                    </button>
+                    <button onClick={() => setDeleteAttachId(att.id)} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-accent-danger" title="Delete">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <Modal isOpen={editPlanOpen} onClose={() => setEditPlanOpen(false)} title="Edit Mission Plan">
         <form onSubmit={handleUpdatePlan} className="space-y-4">
           <FormInput label="Title" value={editPlanForm.title || ''} onChange={(e) => setEditPlanForm({ ...editPlanForm, title: e.target.value })} required />
@@ -440,6 +554,32 @@ export default function MissionDetail() {
           <button type="submit" className="btn-primary">Save Changes</button>
         </form>
       </Modal>
+
+      <Modal isOpen={attachModalOpen} onClose={() => setAttachModalOpen(false)} title="Add Attachment" size="sm">
+        <div className="space-y-4">
+          <FileUpload
+            selectedFile={selectedFile}
+            onChange={setSelectedFile}
+            isUploading={uploading}
+            disabled={uploading}
+          />
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={() => setAttachModalOpen(false)} className="btn-secondary">Cancel</button>
+          <button onClick={handleUploadAttachment} disabled={!selectedFile || uploading} className="btn-primary">
+            {uploading ? 'Uploading...' : 'Upload'}
+          </button>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteAttachId}
+        onClose={() => setDeleteAttachId(null)}
+        onConfirm={handleDeleteAttachment}
+        title="Delete Attachment"
+        message="Are you sure you want to delete this attachment? This action cannot be undone."
+        isLoading={false}
+      />
     </div>
   );
 }

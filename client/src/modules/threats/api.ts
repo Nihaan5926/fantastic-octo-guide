@@ -11,4 +11,11 @@ export const threatsApi = {
   deleteIndicator: (id: string) => api.delete(`/threats/indicators/${id}`),
   getActorRelationships: (id: string) => api.get(`/threats/actors/${id}/relationships`),
   getActorSummary: (id: string) => api.get(`/threats/actors/${id}/summary`),
+  listAttachments: (id: string) => api.get(`/threats/actors/${id}/attachments`),
+  uploadAttachment: (id: string, formData: FormData) =>
+    api.post(`/threats/actors/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteAttachment: (id: string, attachmentId: string) =>
+    api.delete(`/threats/actors/${id}/attachments/${attachmentId}`),
 };

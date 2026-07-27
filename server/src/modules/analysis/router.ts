@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -26,6 +27,12 @@ router.post('/relationships', async (req: Request, res: Response, next: NextFunc
     const [item] = await db('entity_relationships').insert({
       id: uuid(), created_by: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'relationship',
+      entityId: item.id,
+      title: item.relationship_type || 'New relationship',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -33,6 +40,12 @@ router.post('/relationships', async (req: Request, res: Response, next: NextFunc
 router.delete('/relationships/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('entity_relationships').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'relationship',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

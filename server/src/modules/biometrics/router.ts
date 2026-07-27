@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -55,6 +56,12 @@ router.post('/records', async (req: Request, res: Response, next: NextFunction) 
       collector_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'biometric_record',
+      entityId: item.id,
+      title: item.subject_name || 'New biometric record',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -64,6 +71,12 @@ router.put('/records/:id', async (req: Request, res: Response, next: NextFunctio
     const [item] = await db('biometric_records')
       .where({ id: req.params.id }).update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Record not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'biometric_record',
+      entityId: item.id,
+      title: item.subject_name || 'Updated biometric record',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -71,6 +84,12 @@ router.put('/records/:id', async (req: Request, res: Response, next: NextFunctio
 router.delete('/records/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('biometric_records').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'biometric_record',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -124,6 +143,12 @@ router.post('/watchlists', async (req: Request, res: Response, next: NextFunctio
       owner_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'biometric_watchlist',
+      entityId: item.id,
+      title: item.name || 'New watchlist',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -133,6 +158,12 @@ router.put('/watchlists/:id', async (req: Request, res: Response, next: NextFunc
     const [item] = await db('biometric_watchlists')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Watchlist not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'biometric_watchlist',
+      entityId: item.id,
+      title: item.name || 'Updated watchlist',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -140,6 +171,12 @@ router.put('/watchlists/:id', async (req: Request, res: Response, next: NextFunc
 router.delete('/watchlists/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('biometric_watchlists').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'biometric_watchlist',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -195,6 +232,12 @@ router.post('/encounters', async (req: Request, res: Response, next: NextFunctio
       encountered_by: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'biometric_encounter',
+      entityId: item.id,
+      title: item.notes || 'New encounter',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -204,6 +247,12 @@ router.put('/encounters/:id', async (req: Request, res: Response, next: NextFunc
     const [item] = await db('biometric_encounters')
       .where({ id: req.params.id }).update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Encounter not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'biometric_encounter',
+      entityId: item.id,
+      title: item.notes || 'Updated encounter',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -211,6 +260,12 @@ router.put('/encounters/:id', async (req: Request, res: Response, next: NextFunc
 router.delete('/encounters/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('biometric_encounters').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'biometric_encounter',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

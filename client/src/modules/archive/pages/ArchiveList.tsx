@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Edit, Trash2, Archive, FileClock } from 'lucide-react';
+import { Edit, Trash2, Archive, FileClock, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { archiveApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import DataTable from '../../../components/common/DataTable';
@@ -45,6 +47,19 @@ export default function ArchiveList() {
   const [editItem, setEditItem] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     store.fetchCurrentTab();
@@ -58,6 +73,44 @@ export default function ArchiveList() {
     searchTimeout.current = setTimeout(() => {
       store.fetchCurrentTab();
     }, 300);
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const isRecords = store.activeTab === 'records';
+      const { data } = isRecords
+        ? await archiveApi.listRecords({ limit: 1000 })
+        : await archiveApi.listDeclassRequests({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      const label = isRecords ? 'records' : 'declass-requests';
+      exportToCSV(allItems, `archive-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label.replace(/-/g, ' ')} as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const isRecords = store.activeTab === 'records';
+      const { data } = isRecords
+        ? await archiveApi.listRecords({ limit: 1000 })
+        : await archiveApi.listDeclassRequests({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      const label = isRecords ? 'records' : 'declass-requests';
+      exportToJSON(allItems, `archive-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label.replace(/-/g, ' ')} as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
   };
 
   const openCreate = () => {
@@ -155,6 +208,41 @@ export default function ArchiveList() {
   return (
     <div>
       <PageHeader title="Archive" subtitle="Manage archive records and declassification requests" onCreate={openCreate} createLabel={store.activeTab === 'records' ? 'New Record' : 'New Request'}>
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
         <SearchBar value={store.search} onChange={handleSearch} placeholder={`Search ${store.activeTab}...`} />
       </PageHeader>
 

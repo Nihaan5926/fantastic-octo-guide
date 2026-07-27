@@ -1,7 +1,19 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
+import multer from 'multer';
+import path from 'path';
+import { config } from '../../config';
+
+const storage = multer.diskStorage({
+  destination: config.upload.dir,
+  filename: (_req, file, cb) => {
+    cb(null, `${uuid()}-${file.originalname}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize } });
 
 const router = Router();
 router.use(authenticate);
@@ -66,6 +78,12 @@ router.post('/plans', async (req: Request, res: Response, next: NextFunction) =>
       reference_number: ref,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'mission_plan',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New mission',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -75,6 +93,12 @@ router.put('/plans/:id', async (req: Request, res: Response, next: NextFunction)
     const [item] = await db('mission_plans')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Mission plan not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'mission_plan',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated mission',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -82,6 +106,12 @@ router.put('/plans/:id', async (req: Request, res: Response, next: NextFunction)
 router.delete('/plans/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('mission_plans').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'mission_plan',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -109,6 +139,12 @@ router.post('/plans/:planId/briefs', async (req: Request, res: Response, next: N
       prepared_by: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'mission_brief',
+      entityId: item.id,
+      title: item.title || 'New mission brief',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -132,6 +168,12 @@ router.put('/plans/:planId/briefs/:id', async (req: Request, res: Response, next
     const [item] = await db('mission_briefs')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Brief not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'mission_brief',
+      entityId: item.id,
+      title: item.title || 'Updated mission brief',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -139,6 +181,12 @@ router.put('/plans/:planId/briefs/:id', async (req: Request, res: Response, next
 router.delete('/plans/:planId/briefs/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('mission_briefs').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'mission_brief',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -164,6 +212,12 @@ router.post('/plans/:planId/debriefs', async (req: Request, res: Response, next:
       author_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'mission_debrief',
+      entityId: item.id,
+      title: item.title || 'New mission debrief',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -185,6 +239,12 @@ router.put('/plans/:planId/debriefs/:id', async (req: Request, res: Response, ne
     const [item] = await db('mission_debriefs')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Debrief not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'mission_debrief',
+      entityId: item.id,
+      title: item.title || 'Updated mission debrief',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -192,7 +252,62 @@ router.put('/plans/:planId/debriefs/:id', async (req: Request, res: Response, ne
 router.delete('/plans/:planId/debriefs/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('mission_debriefs').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'mission_debrief',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+router.get('/plans/:id/attachments', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const attachments = await db('entity_attachments')
+      .where({ entity_type: 'mission_plan', entity_id: req.params.id })
+      .orderBy('created_at', 'desc');
+    res.json({ data: attachments });
+  } catch (e) { next(e); }
+});
+
+router.post('/plans/:id/attachments', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const file = req.file;
+    if (!file) { res.status(400).json({ error: 'File is required' }); return; }
+    const [attachment] = await db('entity_attachments').insert({
+      id: uuid(),
+      entity_type: 'mission_plan',
+      entity_id: req.params.id,
+      filename: file.filename,
+      original_name: file.originalname,
+      mime_type: file.mimetype,
+      size: file.size,
+      storage_path: `uploads/${file.filename}`,
+      uploaded_by: req.user!.userId,
+      metadata: req.body.label ? { label: req.body.label } : {},
+    }).returning('*');
+    res.status(201).json(attachment);
+  } catch (e) { next(e); }
+});
+
+router.get('/plans/:id/attachments/:aid/download', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const attachment = await db('entity_attachments')
+      .where({ id: req.params.aid, entity_type: 'mission_plan', entity_id: req.params.id })
+      .first();
+    if (!attachment) { res.status(404).json({ error: 'Attachment not found' }); return; }
+    const filePath = path.join(config.upload.dir, attachment.filename);
+    res.download(filePath, attachment.original_name);
+  } catch (e) { next(e); }
+});
+
+router.delete('/plans/:id/attachments/:aid', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('entity_attachments')
+      .where({ id: req.params.aid, entity_type: 'mission_plan', entity_id: req.params.id })
+      .del();
+    res.json({ message: 'Attachment removed' });
   } catch (e) { next(e); }
 });
 

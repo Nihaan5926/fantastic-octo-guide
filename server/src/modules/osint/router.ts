@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -38,6 +39,12 @@ router.post('/tasks', async (req: Request, res: Response, next: NextFunction) =>
     const [item] = await db('osint_collection_tasks').insert({
       id: uuid(), created_by: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'osint_task',
+      entityId: item.id,
+      title: item.title || 'New OSINT task',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -47,6 +54,12 @@ router.put('/tasks/:id', async (req: Request, res: Response, next: NextFunction)
     const [item] = await db('osint_collection_tasks').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'osint_task',
+      entityId: item.id,
+      title: item.title || 'Updated OSINT task',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -54,6 +67,12 @@ router.put('/tasks/:id', async (req: Request, res: Response, next: NextFunction)
 router.delete('/tasks/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('osint_collection_tasks').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'osint_task',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

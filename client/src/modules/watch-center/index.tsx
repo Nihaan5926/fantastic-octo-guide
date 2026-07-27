@@ -1,6 +1,7 @@
 import React from 'react';
 
 const WatchCenter = React.lazy(() => import('./pages/WatchCenter'));
+const WatchDetail = React.lazy(() => import('./pages/WatchDetail'));
 
 export default {
   name: 'watch-center',
@@ -11,6 +12,7 @@ export default {
   globalSearchEnabled: true,
   routes: [
     { path: '/watch-center', element: <WatchCenter /> },
+    { path: '/watch-center/:id', element: <WatchDetail /> },
   ],
   navItems: [
     { label: 'Watch Center', path: '/watch-center', icon: 'Eye', category: 'Personnel', order: 4 },

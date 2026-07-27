@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Edit, Trash2, Wallet, FileText } from 'lucide-react';
+import { Edit, Trash2, Wallet, FileText, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { budgetApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import DataTable from '../../../components/common/DataTable';
@@ -47,6 +49,19 @@ export default function BudgetList() {
   const [editItem, setEditItem] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     store.fetchCurrentTab();
@@ -60,6 +75,44 @@ export default function BudgetList() {
     searchTimeout.current = setTimeout(() => {
       store.fetchCurrentTab();
     }, 300);
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const isProg = store.activeTab === 'programs';
+      const { data } = isProg
+        ? await budgetApi.listPrograms({ limit: 1000 })
+        : await budgetApi.listContracts({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      const label = isProg ? 'programs' : 'contracts';
+      exportToCSV(allItems, `budget-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const isProg = store.activeTab === 'programs';
+      const { data } = isProg
+        ? await budgetApi.listPrograms({ limit: 1000 })
+        : await budgetApi.listContracts({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      const label = isProg ? 'programs' : 'contracts';
+      exportToJSON(allItems, `budget-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
   };
 
   const openCreate = () => {
@@ -197,6 +250,41 @@ export default function BudgetList() {
   return (
     <div>
       <PageHeader title="Budget" subtitle="Manage program budgets and contracts" onCreate={openCreate} createLabel={store.activeTab === 'programs' ? 'New Program' : 'New Contract'}>
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
         <SearchBar value={store.search} onChange={handleSearch} placeholder={`Search ${store.activeTab}...`} />
       </PageHeader>
 

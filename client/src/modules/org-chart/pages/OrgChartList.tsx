@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { ChevronRight, ChevronDown, Pencil, Trash2, Plus, Building2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Pencil, Trash2, Plus, Building2, Download, ChevronDown as ChevronDownIcon } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { orgChartApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import DataTable from '../../../components/common/DataTable';
@@ -92,6 +94,19 @@ export default function OrgChartList() {
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const load = useCallback(() => {
     fetchTree();
@@ -100,6 +115,36 @@ export default function OrgChartList() {
   }, [fetchTree, fetchUnits, fetchAssignments, search, page, assignmentPage]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const { data } = await orgChartApi.listUnits({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, 'org-chart-units-export');
+      toast.success(`Exported ${allItems.length} units as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const { data } = await orgChartApi.listUnits({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, 'org-chart-units-export');
+      toast.success(`Exported ${allItems.length} units as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
 
   const handleCreateUnit = () => {
     setEditingUnitId(null);
@@ -260,7 +305,43 @@ export default function OrgChartList() {
       <PageHeader
         title="Organizational Chart"
         subtitle="Manage units, structure, and personnel assignments"
-      />
+      >
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDownIcon size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
+      </PageHeader>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">

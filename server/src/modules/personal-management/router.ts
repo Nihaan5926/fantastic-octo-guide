@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';
 import path from 'path';
@@ -61,6 +62,12 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const [item] = await db('personnel_records').insert({
       id: uuid(), ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'personnel_record',
+      entityId: item.id,
+      title: item.position_title || 'New personnel record',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -72,6 +79,12 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       .update({ ...req.body, updated_at: db.fn.now() })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'personnel_record',
+      entityId: item.id,
+      title: item.position_title || 'Updated personnel record',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -79,6 +92,12 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('personnel_records').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'personnel_record',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

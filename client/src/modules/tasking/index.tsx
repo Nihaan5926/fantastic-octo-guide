@@ -2,12 +2,14 @@ import React from 'react';
 import { Activity } from 'lucide-react';
 
 const TaskingList = React.lazy(() => import('./pages/TaskingList'));
+const TaskingDetail = React.lazy(() => import('./pages/TaskingDetail'));
 const WorkflowList = React.lazy(() => import('./pages/WorkflowList'));
 
 export default {
   name: 'tasking',
   routes: [
     { path: '/tasking', element: <TaskingList /> },
+    { path: '/tasking/:id', element: <TaskingDetail /> },
     { path: '/tasking/workflows', element: <WorkflowList /> },
   ],
   navItems: [

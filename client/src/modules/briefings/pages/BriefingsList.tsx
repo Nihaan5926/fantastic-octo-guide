@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Eye, Edit, Trash2 } from 'lucide-react';
+import { Eye, Edit, Trash2, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { briefingsApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import DataTable from '../../../components/common/DataTable';
@@ -41,8 +43,21 @@ export default function BriefingsList() {
   const [editItem, setEditItem] = useState<any>(null);
   const [form, setForm] = useState(defaultForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     store.fetchBriefings();
@@ -88,6 +103,36 @@ export default function BriefingsList() {
       toast.success('Briefing created');
     }
     setModalOpen(false);
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const { data } = await briefingsApi.list({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, 'briefings-export');
+      toast.success(`Exported ${allItems.length} briefings as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const { data } = await briefingsApi.list({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, 'briefings-export');
+      toast.success(`Exported ${allItems.length} briefings as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -139,6 +184,41 @@ export default function BriefingsList() {
   return (
     <div>
       <PageHeader title="Briefings" subtitle="Manage intelligence briefings and distribution lists" onCreate={handleCreate} createLabel="New Briefing">
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
         <SearchBar value={store.search} onChange={handleSearch} placeholder="Search briefings..." />
       </PageHeader>
 

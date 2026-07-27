@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -56,6 +57,12 @@ router.get('/transactions/:id', async (req: Request, res: Response, next: NextFu
 router.post('/transactions', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('fint_transactions').insert({ id: uuid(), ...req.body }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'fint_transaction',
+      entityId: item.id,
+      title: item.transaction_ref || item.description || 'New transaction',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -65,6 +72,12 @@ router.put('/transactions/:id', async (req: Request, res: Response, next: NextFu
     const [item] = await db('fint_transactions')
       .where({ id: req.params.id }).update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Transaction not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'fint_transaction',
+      entityId: item.id,
+      title: item.transaction_ref || item.description || 'Updated transaction',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -72,6 +85,12 @@ router.put('/transactions/:id', async (req: Request, res: Response, next: NextFu
 router.delete('/transactions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('fint_transactions').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'fint_transaction',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -113,6 +132,12 @@ router.get('/entities/:id', async (req: Request, res: Response, next: NextFuncti
 router.post('/entities', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('fint_entities').insert({ id: uuid(), ...req.body }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'fint_entity',
+      entityId: item.id,
+      title: item.name || 'New entity',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -122,6 +147,12 @@ router.put('/entities/:id', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('fint_entities')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Entity not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'fint_entity',
+      entityId: item.id,
+      title: item.name || 'Updated entity',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -129,6 +160,12 @@ router.put('/entities/:id', async (req: Request, res: Response, next: NextFuncti
 router.delete('/entities/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('fint_entities').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'fint_entity',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

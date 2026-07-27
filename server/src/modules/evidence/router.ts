@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
 import { auditLog } from '../../middleware/audit';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';
 import path from 'path';
@@ -149,6 +150,13 @@ router.post('/', auditLog('evidence:upload', 'evidence'), upload.single('file'),
       chain_of_custody: JSON.stringify([custodyEntry]),
     }).returning('*');
 
+    eventBus.emit('entity:created', {
+      entityType: 'evidence',
+      entityId: item.id,
+      title: item.title || 'New evidence',
+      userId: req.user!.userId,
+    });
+
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -207,6 +215,12 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     const [item] = await db('evidence').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'evidence',
+      entityId: item.id,
+      title: item.title || 'Updated evidence',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -219,6 +233,12 @@ router.delete('/:id', auditLog('evidence:delete', 'evidence'), async (req: Reque
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     await db('evidence').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'evidence',
+      entityId: req.params.id,
+      title: item?.title || req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

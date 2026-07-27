@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -46,6 +47,12 @@ router.get('/shifts/:id', async (req: Request, res: Response, next: NextFunction
 router.post('/shifts', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('shift_schedules').insert({ id: uuid(), ...req.body }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'shift_schedule',
+      entityId: item.id,
+      title: item.shift_name || 'New shift',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -57,6 +64,12 @@ router.put('/shifts/:id', async (req: Request, res: Response, next: NextFunction
       .update({ ...req.body, updated_at: db.fn.now() })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'shift_schedule',
+      entityId: item.id,
+      title: item.shift_name || 'Updated shift',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -64,6 +77,12 @@ router.put('/shifts/:id', async (req: Request, res: Response, next: NextFunction
 router.delete('/shifts/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('shift_schedules').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'shift_schedule',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -126,6 +145,12 @@ router.post('/logs', async (req: Request, res: Response, next: NextFunction) => 
     const [item] = await db('watch_logs').insert({
       id: uuid(), author_id: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'watch_log',
+      entityId: item.id,
+      title: item.log_type || 'New watch log',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -137,6 +162,12 @@ router.put('/logs/:id', async (req: Request, res: Response, next: NextFunction) 
       .update({ ...req.body })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'watch_log',
+      entityId: item.id,
+      title: item.log_type || 'Updated watch log',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -144,6 +175,12 @@ router.put('/logs/:id', async (req: Request, res: Response, next: NextFunction) 
 router.delete('/logs/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('watch_logs').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'watch_log',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -195,6 +232,12 @@ router.post('/sitreps', async (req: Request, res: Response, next: NextFunction) 
     const [item] = await db('sitreps').insert({
       id: uuid(), reference_number: ref, author_id: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'sitrep',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New sitrep',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -206,6 +249,12 @@ router.put('/sitreps/:id', async (req: Request, res: Response, next: NextFunctio
       .update({ ...req.body, updated_at: db.fn.now() })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'sitrep',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated sitrep',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -213,6 +262,12 @@ router.put('/sitreps/:id', async (req: Request, res: Response, next: NextFunctio
 router.delete('/sitreps/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('sitreps').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'sitrep',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

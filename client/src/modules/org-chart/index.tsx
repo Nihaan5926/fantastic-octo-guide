@@ -1,6 +1,7 @@
 import React from 'react';
 
 const OrgChartList = React.lazy(() => import('./pages/OrgChartList'));
+const OrgUnitDetail = React.lazy(() => import('./pages/OrgUnitDetail'));
 
 export default {
   name: 'org-chart',
@@ -11,6 +12,7 @@ export default {
   globalSearchEnabled: true,
   routes: [
     { path: '/org-chart', element: <OrgChartList /> },
+    { path: '/org-chart/:id', element: <OrgUnitDetail /> },
   ],
   navItems: [
     { label: 'Org Chart', path: '/org-chart', icon: 'GitBranch', category: 'Personnel', order: 2 },

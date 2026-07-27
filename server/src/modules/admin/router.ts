@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 
 const router = Router();
 router.use(authenticate);
@@ -74,6 +75,12 @@ router.post('/users', async (req: Request, res: Response, next: NextFunction) =>
     }).returning('*');
 
     const { password_hash: _, ...rest } = user;
+    eventBus.emit('entity:created', {
+      entityType: 'user',
+      entityId: user.id,
+      title: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      userId: req.user!.userId,
+    });
     res.status(201).json(rest);
   } catch (e) { next(e); }
 });
@@ -106,6 +113,12 @@ router.put('/users/:id', async (req: Request, res: Response, next: NextFunction)
     const [user] = await db('users').where({ id: req.params.id }).update(update).returning('*');
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     const { password_hash: _, ...rest } = user;
+    eventBus.emit('entity:updated', {
+      entityType: 'user',
+      entityId: user.id,
+      title: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      userId: req.user!.userId,
+    });
     res.json(rest);
   } catch (e) { next(e); }
 });
@@ -113,6 +126,12 @@ router.put('/users/:id', async (req: Request, res: Response, next: NextFunction)
 router.delete('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('users').where({ id: req.params.id }).update({ is_active: false });
+    eventBus.emit('entity:deleted', {
+      entityType: 'user',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'User deactivated' });
   } catch (e) { next(e); }
 });
@@ -122,6 +141,12 @@ router.delete('/users/:id/permanent', async (req: Request, res: Response, next: 
     const user = await db('users').where({ id: req.params.id }).first();
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     await db('users').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'user',
+      entityId: req.params.id,
+      title: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'User permanently deleted' });
   } catch (e) { next(e); }
 });
@@ -153,6 +178,12 @@ router.post('/roles', async (req: Request, res: Response, next: NextFunction) =>
       id: uuid(), name: req.body.name, description: req.body.description,
       permissions: JSON.stringify(req.body.permissions || []),
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'role',
+      entityId: role.id,
+      title: role.name,
+      userId: req.user!.userId,
+    });
     res.status(201).json(role);
   } catch (e) { next(e); }
 });
@@ -165,6 +196,12 @@ router.put('/roles/:id', async (req: Request, res: Response, next: NextFunction)
     if (req.body.permissions) update.permissions = JSON.stringify(req.body.permissions);
     const [role] = await db('roles').where({ id: req.params.id }).update(update).returning('*');
     if (!role) { res.status(404).json({ error: 'Role not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'role',
+      entityId: role.id,
+      title: role.name,
+      userId: req.user!.userId,
+    });
     res.json(role);
   } catch (e) { next(e); }
 });
@@ -174,6 +211,12 @@ router.delete('/roles/:id', async (req: Request, res: Response, next: NextFuncti
     const usersWithRole = await db('users').where({ role_id: req.params.id }).first();
     if (usersWithRole) { res.status(400).json({ error: 'Cannot delete role assigned to users' }); return; }
     await db('roles').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'role',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Role deleted' });
   } catch (e) { next(e); }
 });

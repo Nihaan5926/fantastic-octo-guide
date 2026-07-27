@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Edit, Shield, UserCheck, UserX, RefreshCw, Loader2, Search } from 'lucide-react';
+import { Plus, Trash2, Edit, Shield, UserCheck, UserX, RefreshCw, Loader2, Search, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { adminApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
@@ -29,10 +31,67 @@ export default function AdminUsers() {
   const [roleForm, setRoleForm] = useState({ name: '', description: '', permissions: ['reports:read'] });
   const [deleteRoleTarget, setDeleteRoleTarget] = useState<any>(null);
   const [permInput, setPermInput] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => { fetchUsers({ page, search }); fetchRoles(); }, [page]);
 
   const handleSearch = () => { fetchUsers({ page: 1, search }); };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      if (activeTab === 'users') {
+        const data = await adminApi.listUsers({ limit: 1000 });
+        const items = data.data || data.items || [];
+        exportToCSV(items, 'admin-users-export');
+        toast.success(`Exported ${items.length} users as CSV`);
+      } else {
+        const data = await adminApi.listRoles();
+        const items = data.data || data.items || [];
+        exportToCSV(items, 'admin-roles-export');
+        toast.success(`Exported ${items.length} roles as CSV`);
+      }
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      if (activeTab === 'users') {
+        const data = await adminApi.listUsers({ limit: 1000 });
+        const items = data.data || data.items || [];
+        exportToJSON(items, 'admin-users-export');
+        toast.success(`Exported ${items.length} users as JSON`);
+      } else {
+        const data = await adminApi.listRoles();
+        const items = data.data || data.items || [];
+        exportToJSON(items, 'admin-roles-export');
+        toast.success(`Exported ${items.length} roles as JSON`);
+      }
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
 
   const openCreateUser = () => {
     setEditingUser(null);
@@ -115,7 +174,43 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Admin Panel" subtitle="User and role management" />
+      <PageHeader title="Admin Panel" subtitle="User and role management">
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
+      </PageHeader>
 
       <div className="flex gap-2 border-b border-border">
         {(['users', 'roles'] as const).map((t) => (

@@ -6,7 +6,10 @@ import { reportsApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
 import { FormTextarea } from '../../../components/common/FormComponents';
-import { ArrowLeft, Send, Printer, Share2 } from 'lucide-react';
+import Modal from '../../../components/common/Modal';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import FileUpload from '../../../components/common/FileUpload';
+import { ArrowLeft, Send, Printer, Share2, Plus, Trash2, Download, File, Paperclip } from 'lucide-react';
 
 const STATUS_FLOW = ['DRAFT', 'IN_REVIEW', 'APPROVED', 'DISSEMINATED'];
 
@@ -21,11 +24,17 @@ export default function ReportsDetail() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachModalOpen, setAttachModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleteAttachId, setDeleteAttachId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
       fetchOne(id);
       fetchComments();
+      fetchAttachments();
     }
   }, [id]);
 
@@ -34,6 +43,65 @@ export default function ReportsDetail() {
       const { data } = await reportsApi.getComments(id!);
       setComments(data.data || data || []);
     } catch { /* ignore */ }
+  };
+
+  const fetchAttachments = async () => {
+    if (!id) return;
+    try {
+      const { data } = await reportsApi.listAttachments(id);
+      setAttachments(data.data || []);
+    } catch {}
+  };
+
+  const handleUploadAttachment = async () => {
+    if (!id || !selectedFile) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      await reportsApi.uploadAttachment(id, fd);
+      toast.success('Attachment uploaded');
+      setAttachModalOpen(false);
+      setSelectedFile(null);
+      fetchAttachments();
+    } catch {
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async () => {
+    if (!id || !deleteAttachId) return;
+    try {
+      await reportsApi.deleteAttachment(id, deleteAttachId);
+      toast.success('Attachment removed');
+      setDeleteAttachId(null);
+      fetchAttachments();
+    } catch {
+      toast.error('Delete failed');
+    }
+  };
+
+  const handleDownloadAttachment = async (attachmentId: string) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`/api/reports/${id}/attachments/${attachmentId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { toast.error('Download failed'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const disposition = res.headers.get('content-disposition');
+      if (disposition) {
+        const match = disposition.match(/filename="?(.+?)"?$/);
+        if (match) a.download = match[1];
+      }
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error('Download failed'); }
   };
 
   const currentIdx = STATUS_FLOW.indexOf(selected?.status);
@@ -295,8 +363,72 @@ export default function ReportsDetail() {
               </button>
             </div>
           </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Paperclip size={18} /> Attachments
+              </h2>
+              <button onClick={() => { setSelectedFile(null); setAttachModalOpen(true); }} className="btn-primary text-sm">
+                <Plus size={14} /> Add File
+              </button>
+            </div>
+            {attachments.length === 0 ? (
+              <p className="text-sm text-text-muted text-center py-8">No attachments yet</p>
+            ) : (
+              <div className="space-y-2">
+                {attachments.map((att: any) => (
+                  <div key={att.id} className="flex items-center justify-between p-3 bg-bg-primary rounded-lg border border-border">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <File size={16} className="text-text-muted shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{att.original_name}</p>
+                        <p className="text-xs text-text-muted">
+                          {att.mime_type} {att.size ? `· ${att.size > 1048576 ? `${(att.size / 1048576).toFixed(1)} MB` : `${(att.size / 1024).toFixed(1)} KB`}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => handleDownloadAttachment(att.id)} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-accent" title="Download">
+                        <Download size={14} />
+                      </button>
+                      <button onClick={() => setDeleteAttachId(att.id)} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-accent-danger" title="Delete">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      <Modal isOpen={attachModalOpen} onClose={() => setAttachModalOpen(false)} title="Add Attachment" size="sm">
+        <div className="space-y-4">
+          <FileUpload
+            selectedFile={selectedFile}
+            onChange={setSelectedFile}
+            isUploading={uploading}
+            disabled={uploading}
+          />
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={() => setAttachModalOpen(false)} className="btn-secondary">Cancel</button>
+          <button onClick={handleUploadAttachment} disabled={!selectedFile || uploading} className="btn-primary">
+            {uploading ? 'Uploading...' : 'Upload'}
+          </button>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteAttachId}
+        onClose={() => setDeleteAttachId(null)}
+        onConfirm={handleDeleteAttachment}
+        title="Delete Attachment"
+        message="Are you sure you want to delete this attachment? This action cannot be undone."
+        isLoading={false}
+      />
     </div>
   );
 }

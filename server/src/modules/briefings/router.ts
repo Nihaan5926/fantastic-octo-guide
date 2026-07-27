@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';
 import path from 'path';
@@ -70,6 +71,12 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       ...req.body,
       prepared_by: req.user!.userId,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'briefing',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New briefing',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -79,6 +86,12 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     const [item] = await db('briefings').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Briefing not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'briefing',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated briefing',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -86,6 +99,12 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('briefings').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'briefing',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

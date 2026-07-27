@@ -1,6 +1,9 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Edit, Trash2, ArrowRightCircle, AlertTriangle, Flag } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import toast from 'react-hot-toast';
+import { Edit, Trash2, ArrowRightCircle, AlertTriangle, Flag, Download, ChevronDown } from 'lucide-react';
 import { useFintStore } from '../store';
+import { fintApi } from '../api';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import DataTable from '../../../components/common/DataTable';
@@ -45,6 +48,19 @@ export default function FintList() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     fetchTransactions();
@@ -109,6 +125,44 @@ export default function FintList() {
     }
     setSaving(false);
     if (ok) setModalOpen(false);
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const isTx = activeTab === 'transactions';
+      const { data } = isTx
+        ? await fintApi.listTransactions({ limit: 1000 })
+        : await fintApi.listEntities({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      const label = isTx ? 'transactions' : 'entities';
+      exportToCSV(allItems, `fint-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const isTx = activeTab === 'transactions';
+      const { data } = isTx
+        ? await fintApi.listTransactions({ limit: 1000 })
+        : await fintApi.listEntities({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      const label = isTx ? 'transactions' : 'entities';
+      exportToJSON(allItems, `fint-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
   };
 
   const openDeleteConfirm = (id: string) => { setDeleteTargetId(id); setConfirmOpen(true); };
@@ -243,7 +297,43 @@ export default function FintList() {
 
   return (
     <div>
-      <PageHeader title="FININT" subtitle="Financial Intelligence" onCreate={openCreate} createLabel={activeTab === 'transactions' ? 'New Transaction' : 'New Entity'} />
+      <PageHeader title="FININT" subtitle="Financial Intelligence" onCreate={openCreate} createLabel={activeTab === 'transactions' ? 'New Transaction' : 'New Entity'}>
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
+      </PageHeader>
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-1 bg-bg-tertiary rounded-lg p-1">

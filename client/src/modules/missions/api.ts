@@ -6,6 +6,13 @@ const missionPlansApi = {
   create: (data: any) => api.post('/missions/plans', data).then((r) => r.data),
   update: (id: string, data: any) => api.put(`/missions/plans/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/missions/plans/${id}`).then((r) => r.data),
+  listAttachments: (id: string) => api.get(`/missions/plans/${id}/attachments`),
+  uploadAttachment: (id: string, formData: FormData) =>
+    api.post(`/missions/plans/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteAttachment: (id: string, attachmentId: string) =>
+    api.delete(`/missions/plans/${id}/attachments/${attachmentId}`),
 };
 
 const missionBriefsApi = {

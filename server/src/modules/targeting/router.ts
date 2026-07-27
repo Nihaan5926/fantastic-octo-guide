@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -68,6 +69,12 @@ router.post('/packages', async (req: Request, res: Response, next: NextFunction)
       author_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'target_package',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New target package',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -77,6 +84,12 @@ router.put('/packages/:id', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('target_packages')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'target_package',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated target package',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -84,6 +97,12 @@ router.put('/packages/:id', async (req: Request, res: Response, next: NextFuncti
 router.delete('/packages/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('target_packages').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'target_package',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -111,6 +130,12 @@ router.post('/packages/:packageId/nominations', async (req: Request, res: Respon
       nominator_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'target_nomination',
+      entityId: item.id,
+      title: item.target_name || 'New nomination',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -120,6 +145,12 @@ router.put('/nominations/:id', async (req: Request, res: Response, next: NextFun
     const [item] = await db('target_nominations')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Nomination not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'target_nomination',
+      entityId: item.id,
+      title: item.target_name || 'Updated nomination',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -127,6 +158,12 @@ router.put('/nominations/:id', async (req: Request, res: Response, next: NextFun
 router.delete('/nominations/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('target_nominations').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'target_nomination',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

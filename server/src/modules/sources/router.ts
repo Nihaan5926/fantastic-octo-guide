@@ -2,9 +2,21 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
 import { auditLog } from '../../middleware/audit';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import { sanitizeInput } from '../../utils/validators';
 import { logger } from '../../utils/logger';
+import multer from 'multer';
+import path from 'path';
+import { config } from '../../config';
+
+const storage = multer.diskStorage({
+  destination: config.upload.dir,
+  filename: (_req, file, cb) => {
+    cb(null, `${uuid()}-${file.originalname}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize } });
 
 const router = Router();
 router.use(authenticate);
@@ -45,6 +57,12 @@ router.post('/', auditLog('source:create', 'source'), async (req: Request, res: 
     const body = sanitizeInput(req.body);
     const [item] = await db('sources').insert({ id: uuid(), ...body }).returning('*');
     logger.info(`Source created: ${item.code_name}`, { sourceId: item.id });
+    eventBus.emit('entity:created', {
+      entityType: 'source',
+      entityId: item.id,
+      title: item.code_name || 'New source',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -56,6 +74,12 @@ router.put('/:id', auditLog('source:update', 'source'), async (req: Request, res
       .update({ ...body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
     logger.info(`Source updated: ${item.code_name}`, { sourceId: item.id });
+    eventBus.emit('entity:updated', {
+      entityType: 'source',
+      entityId: item.id,
+      title: item.code_name || 'Updated source',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -63,7 +87,62 @@ router.put('/:id', auditLog('source:update', 'source'), async (req: Request, res
 router.delete('/:id', auditLog('source:delete', 'source'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('sources').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'source',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+router.get('/:id/attachments', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const attachments = await db('entity_attachments')
+      .where({ entity_type: 'source', entity_id: req.params.id })
+      .orderBy('created_at', 'desc');
+    res.json({ data: attachments });
+  } catch (e) { next(e); }
+});
+
+router.post('/:id/attachments', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const file = req.file;
+    if (!file) { res.status(400).json({ error: 'File is required' }); return; }
+    const [attachment] = await db('entity_attachments').insert({
+      id: uuid(),
+      entity_type: 'source',
+      entity_id: req.params.id,
+      filename: file.filename,
+      original_name: file.originalname,
+      mime_type: file.mimetype,
+      size: file.size,
+      storage_path: `uploads/${file.filename}`,
+      uploaded_by: req.user!.userId,
+      metadata: req.body.label ? { label: req.body.label } : {},
+    }).returning('*');
+    res.status(201).json(attachment);
+  } catch (e) { next(e); }
+});
+
+router.get('/:id/attachments/:aid/download', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const attachment = await db('entity_attachments')
+      .where({ id: req.params.aid, entity_type: 'source', entity_id: req.params.id })
+      .first();
+    if (!attachment) { res.status(404).json({ error: 'Attachment not found' }); return; }
+    const filePath = path.join(config.upload.dir, attachment.filename);
+    res.download(filePath, attachment.original_name);
+  } catch (e) { next(e); }
+});
+
+router.delete('/:id/attachments/:aid', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('entity_attachments')
+      .where({ id: req.params.aid, entity_type: 'source', entity_id: req.params.id })
+      .del();
+    res.json({ message: 'Attachment removed' });
   } catch (e) { next(e); }
 });
 

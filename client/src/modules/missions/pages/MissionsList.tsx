@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Edit, Trash2, Eye, Calendar, MapPin } from 'lucide-react';
+import { Edit, Trash2, Eye, Calendar, MapPin, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { missionPlansApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
@@ -61,6 +63,19 @@ export default function MissionsList() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     fetchPlans({ search, limit: 10 });
@@ -121,6 +136,36 @@ export default function MissionsList() {
       toast.error('Failed to save mission plan');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const data = await missionPlansApi.list({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, 'missions-export');
+      toast.success(`Exported ${allItems.length} missions as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const data = await missionPlansApi.list({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, 'missions-export');
+      toast.success(`Exported ${allItems.length} missions as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
     }
   };
 
@@ -211,7 +256,43 @@ export default function MissionsList() {
         subtitle="Manage mission plans, briefs, and debriefs"
         onCreate={handleCreate}
         createLabel="New Mission Plan"
-      />
+      >
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
+      </PageHeader>
       <SearchBar value={search} onChange={(v) => { setSearch(v); fetchPlans({ search: v, page: 1, limit: 10 }); }} placeholder="Search mission plans..." />
       <DataTable
         columns={columns}

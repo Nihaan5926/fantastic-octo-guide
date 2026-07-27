@@ -6,6 +6,17 @@ import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 import { sanitizeInput } from '../../utils/validators';
 import { logger } from '../../utils/logger';
+import multer from 'multer';
+import path from 'path';
+import { config } from '../../config';
+
+const storage = multer.diskStorage({
+  destination: config.upload.dir,
+  filename: (_req, file, cb) => {
+    cb(null, `${uuid()}-${file.originalname}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize } });
 
 const router = Router();
 router.use(authenticate);
@@ -149,6 +160,55 @@ router.get('/:id/timeline', async (req: Request, res: Response, next: NextFuncti
     ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     res.json({ data: timeline });
+  } catch (e) { next(e); }
+});
+
+router.get('/:id/attachments', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const attachments = await db('entity_attachments')
+      .where({ entity_type: 'case', entity_id: req.params.id })
+      .orderBy('created_at', 'desc');
+    res.json({ data: attachments });
+  } catch (e) { next(e); }
+});
+
+router.post('/:id/attachments', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const file = req.file;
+    if (!file) { res.status(400).json({ error: 'File is required' }); return; }
+    const [attachment] = await db('entity_attachments').insert({
+      id: uuid(),
+      entity_type: 'case',
+      entity_id: req.params.id,
+      filename: file.filename,
+      original_name: file.originalname,
+      mime_type: file.mimetype,
+      size: file.size,
+      storage_path: `uploads/${file.filename}`,
+      uploaded_by: req.user!.userId,
+      metadata: req.body.label ? { label: req.body.label } : {},
+    }).returning('*');
+    res.status(201).json(attachment);
+  } catch (e) { next(e); }
+});
+
+router.get('/:id/attachments/:aid/download', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const attachment = await db('entity_attachments')
+      .where({ id: req.params.aid, entity_type: 'case', entity_id: req.params.id })
+      .first();
+    if (!attachment) { res.status(404).json({ error: 'Attachment not found' }); return; }
+    const filePath = path.join(config.upload.dir, attachment.filename);
+    res.download(filePath, attachment.original_name);
+  } catch (e) { next(e); }
+});
+
+router.delete('/:id/attachments/:aid', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('entity_attachments')
+      .where({ id: req.params.aid, entity_type: 'case', entity_id: req.params.id })
+      .del();
+    res.json({ message: 'Attachment removed' });
   } catch (e) { next(e); }
 });
 

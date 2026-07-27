@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useOSINTStore } from '../store';
+import { osintApi } from '../api';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
@@ -9,7 +11,7 @@ import SearchBar from '../../../components/common/SearchBar';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { StatusBadge } from '../../../components/common/Badges';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Pencil, Trash2, Play, Eye } from 'lucide-react';
+import { Pencil, Trash2, Play, Eye, Download, ChevronDown } from 'lucide-react';
 
 const sourceTypeOptions = [
   { value: 'SOCIAL_MEDIA', label: 'Social Media' },
@@ -62,6 +64,19 @@ export default function TaskList() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<TaskForm>(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     fetchList({ page, search, status: statusFilter });
@@ -121,6 +136,36 @@ export default function TaskList() {
     }
   };
 
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const { data } = await osintApi.list({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, 'osint-tasks-export');
+      toast.success(`Exported ${allItems.length} tasks as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const { data } = await osintApi.list({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, 'osint-tasks-export');
+      toast.success(`Exported ${allItems.length} tasks as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
   const handleRun = async (id: string) => {
     try {
       await run(id);
@@ -165,7 +210,43 @@ export default function TaskList() {
 
   return (
     <div>
-      <PageHeader title="OSINT Tasks" subtitle="Manage open-source intelligence collection tasks" onCreate={openCreate} createLabel="New Task" />
+      <PageHeader title="OSINT Tasks" subtitle="Manage open-source intelligence collection tasks" onCreate={openCreate} createLabel="New Task">
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
+      </PageHeader>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search tasks..." className="flex-1" />

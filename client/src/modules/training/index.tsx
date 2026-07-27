@@ -1,6 +1,7 @@
 import React from 'react';
 
 const TrainingPage = React.lazy(() => import('./pages/TrainingPage'));
+const TrainingCourseDetail = React.lazy(() => import('./pages/TrainingCourseDetail'));
 
 export default {
   name: 'training',
@@ -11,6 +12,7 @@ export default {
   globalSearchEnabled: true,
   routes: [
     { path: '/training', element: <TrainingPage /> },
+    { path: '/training/:id', element: <TrainingCourseDetail /> },
   ],
   navItems: [
     { label: 'Training', path: '/training', icon: 'GraduationCap', category: 'Personnel', order: 3 },

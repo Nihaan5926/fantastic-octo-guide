@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Edit, Trash2, Send, Users, MessageSquare, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Trash2, Send, Users, MessageSquare, RefreshCw, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { messagingApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import Modal from '../../../components/common/Modal';
@@ -19,8 +21,21 @@ export default function MessagesList() {
   const [deleteChannelId, setDeleteChannelId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     store.fetchChannels();
@@ -36,6 +51,36 @@ export default function MessagesList() {
     searchTimeout.current = setTimeout(() => {
       store.fetchChannels();
     }, 300);
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const { data } = await messagingApi.listChannels({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, 'messaging-channels-export');
+      toast.success(`Exported ${allItems.length} channels as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const { data } = await messagingApi.listChannels({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, 'messaging-channels-export');
+      toast.success(`Exported ${allItems.length} channels as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
   };
 
   const handleChannelCreate = () => {
@@ -88,8 +133,46 @@ export default function MessagesList() {
     <div className="flex h-[calc(100vh-8rem)] gap-0">
       <div className="w-80 shrink-0 border-r border-border flex flex-col">
         <div className="p-4 border-b border-border">
-          <PageHeader title="Channels" subtitle="Secure messaging" onCreate={handleChannelCreate} createLabel="New Channel" />
-          <SearchBar value={store.search} onChange={handleSearch} placeholder="Search channels..." />
+          <PageHeader title="Channels" subtitle="Secure messaging" onCreate={handleChannelCreate} createLabel="New Channel">
+            <SearchBar value={store.search} onChange={handleSearch} placeholder="Search channels..." />
+          </PageHeader>
+          <div className="px-4 pb-2">
+            <div className="relative" ref={exportRef}>
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                disabled={exporting}
+                className="btn-secondary w-full text-xs"
+              >
+                {exporting ? (
+                  <span className="flex items-center gap-1">
+                    <span className="animate-pulse">Exporting...</span>
+                  </span>
+                ) : (
+                  <>
+                    <Download size={14} />
+                    Export Channels
+                    <ChevronDown size={12} />
+                  </>
+                )}
+              </button>
+              {exportOpen && (
+                <div className="absolute left-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+                  <button
+                    onClick={handleExportCSV}
+                    className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+                  >
+                    <Download size={14} /> Export CSV
+                  </button>
+                  <button
+                    onClick={handleExportJSON}
+                    className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+                  >
+                    <Download size={14} /> Export JSON
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {store.isLoading && store.channels.length === 0 ? (

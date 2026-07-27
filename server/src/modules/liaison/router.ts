@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -52,6 +53,12 @@ router.post('/partners', async (req: Request, res: Response, next: NextFunction)
     const [item] = await db('external_partners').insert({
       id: uuid(), ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'external_partner',
+      entityId: item.id,
+      title: item.name || item.organization || 'New partner',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -61,6 +68,12 @@ router.put('/partners/:id', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('external_partners').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Partner not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'external_partner',
+      entityId: item.id,
+      title: item.name || item.organization || 'Updated partner',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -68,6 +81,12 @@ router.put('/partners/:id', async (req: Request, res: Response, next: NextFuncti
 router.delete('/partners/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('external_partners').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'external_partner',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -115,6 +134,12 @@ router.post('/agreements', async (req: Request, res: Response, next: NextFunctio
     const [item] = await db('mou_agreements').insert({
       id: uuid(), ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'mou_agreement',
+      entityId: item.id,
+      title: item.title || 'New agreement',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -124,6 +149,12 @@ router.put('/agreements/:id', async (req: Request, res: Response, next: NextFunc
     const [item] = await db('mou_agreements').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Agreement not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'mou_agreement',
+      entityId: item.id,
+      title: item.title || 'Updated agreement',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -131,6 +162,12 @@ router.put('/agreements/:id', async (req: Request, res: Response, next: NextFunc
 router.delete('/agreements/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('mou_agreements').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'mou_agreement',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -160,6 +197,12 @@ router.post('/contact-logs', async (req: Request, res: Response, next: NextFunct
     const [item] = await db('partner_contact_logs').insert({
       id: uuid(), contactor_id: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'partner_contact_log',
+      entityId: item.id,
+      title: item.subject || 'New contact log',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -178,6 +221,12 @@ router.get('/partners/:id/contact-logs', async (req: Request, res: Response, nex
 router.delete('/contact-logs/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('partner_contact_logs').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'partner_contact_log',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

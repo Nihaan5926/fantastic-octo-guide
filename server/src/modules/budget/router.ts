@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -60,6 +61,12 @@ router.post('/budgets', async (req: Request, res: Response, next: NextFunction) 
       ...req.body,
       manager_id: req.user!.userId,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'budget',
+      entityId: item.id,
+      title: item.program_name || item.reference_number || 'New budget',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -69,6 +76,12 @@ router.put('/budgets/:id', async (req: Request, res: Response, next: NextFunctio
     const [item] = await db('program_budgets').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Budget not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'budget',
+      entityId: item.id,
+      title: item.program_name || item.reference_number || 'Updated budget',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -76,6 +89,12 @@ router.put('/budgets/:id', async (req: Request, res: Response, next: NextFunctio
 router.delete('/budgets/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('program_budgets').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'budget',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -141,6 +160,12 @@ router.post('/contracts', async (req: Request, res: Response, next: NextFunction
       ...req.body,
       contracting_officer_id: req.user!.userId,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'contract',
+      entityId: item.id,
+      title: item.reference_number || item.vendor_name || 'New contract',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -150,6 +175,12 @@ router.put('/contracts/:id', async (req: Request, res: Response, next: NextFunct
     const [item] = await db('contracts').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Contract not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'contract',
+      entityId: item.id,
+      title: item.reference_number || item.vendor_name || 'Updated contract',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -157,6 +188,12 @@ router.put('/contracts/:id', async (req: Request, res: Response, next: NextFunct
 router.delete('/contracts/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('contracts').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'contract',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

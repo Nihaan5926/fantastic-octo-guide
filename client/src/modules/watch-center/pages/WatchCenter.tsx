@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Pencil, Trash2, Plus, Clock, FileText, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, Plus, Clock, FileText, AlertCircle, AlertTriangle, RefreshCw, Download, ChevronDown } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { watchCenterApi } from '../api';
 import PageHeader from '../../../components/common/PageHeader';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
@@ -98,6 +100,19 @@ export default function WatchCenter() {
   const [sitrepForm, setSitrepForm] = useState<Partial<SITREP>>(emptySITREP);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const highAlerts = logs.filter((l: WatchLog) => l.severity === 'CRITICAL' || l.severity === 'WARNING');
   const activeSITREPs = sitreps.filter((s: SITREP) => s.status === 'SUBMITTED' || s.status === 'DRAFT');
@@ -122,6 +137,60 @@ export default function WatchCenter() {
     const interval = setInterval(refreshAll, 60000);
     return () => clearInterval(interval);
   }, [refreshAll]);
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      let result;
+      let label: string;
+      if (tab === 'shifts') {
+        result = await watchCenterApi.listShifts({ limit: 1000 });
+        label = 'shifts';
+      } else if (tab === 'logs') {
+        result = await watchCenterApi.listLogs({ limit: 1000 });
+        label = 'logs';
+      } else {
+        result = await watchCenterApi.listSITREPs({ limit: 1000 });
+        label = 'sitreps';
+      }
+      const { data } = result;
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, `watch-center-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      let result;
+      let label: string;
+      if (tab === 'shifts') {
+        result = await watchCenterApi.listShifts({ limit: 1000 });
+        label = 'shifts';
+      } else if (tab === 'logs') {
+        result = await watchCenterApi.listLogs({ limit: 1000 });
+        label = 'logs';
+      } else {
+        result = await watchCenterApi.listSITREPs({ limit: 1000 });
+        label = 'sitreps';
+      }
+      const { data } = result;
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, `watch-center-${label}-export`);
+      toast.success(`Exported ${allItems.length} ${label} as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
 
   const handleCreate = () => {
     setEditingId(null);
@@ -307,7 +376,43 @@ export default function WatchCenter() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <PageHeader title="Watch Center" subtitle="Manage shift schedules, watch logs, and situational reports" />
+        <PageHeader title="Watch Center" subtitle="Manage shift schedules, watch logs, and situational reports">
+          <div className="relative" ref={exportRef}>
+            <button
+              onClick={() => setExportOpen(!exportOpen)}
+              disabled={exporting}
+              className="btn-secondary"
+            >
+              {exporting ? (
+                <span className="flex items-center gap-1">
+                  <span className="animate-pulse">Exporting...</span>
+                </span>
+              ) : (
+                <>
+                  <Download size={16} />
+                  Export
+                  <ChevronDown size={14} />
+                </>
+              )}
+            </button>
+            {exportOpen && (
+              <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+                <button
+                  onClick={handleExportCSV}
+                  className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+                >
+                  <Download size={14} /> Export CSV
+                </button>
+                <button
+                  onClick={handleExportJSON}
+                  className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+                >
+                  <Download size={14} /> Export JSON
+                </button>
+              </div>
+            )}
+          </div>
+        </PageHeader>
         <button onClick={refreshAll} className="btn-ghost flex items-center gap-1" title="Refresh data">
           <RefreshCw size={16} /> Refresh
         </button>

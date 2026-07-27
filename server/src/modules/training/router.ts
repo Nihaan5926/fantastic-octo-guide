@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -50,6 +51,12 @@ router.get('/courses/:id', async (req: Request, res: Response, next: NextFunctio
 router.post('/courses', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('training_courses').insert({ id: uuid(), ...req.body }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'training_course',
+      entityId: item.id,
+      title: item.title || 'New course',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -61,6 +68,12 @@ router.put('/courses/:id', async (req: Request, res: Response, next: NextFunctio
       .update({ ...req.body, updated_at: db.fn.now() })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'training_course',
+      entityId: item.id,
+      title: item.title || 'Updated course',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -68,6 +81,12 @@ router.put('/courses/:id', async (req: Request, res: Response, next: NextFunctio
 router.delete('/courses/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('training_courses').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'training_course',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -109,6 +128,12 @@ router.post('/enrollments', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('training_enrollments').insert({
       id: uuid(), ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'training_enrollment',
+      entityId: item.id,
+      title: item.status || 'New enrollment',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -120,6 +145,12 @@ router.put('/enrollments/:id', async (req: Request, res: Response, next: NextFun
       .update({ ...req.body })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'training_enrollment',
+      entityId: item.id,
+      title: item.status || 'Updated enrollment',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -127,6 +158,12 @@ router.put('/enrollments/:id', async (req: Request, res: Response, next: NextFun
 router.delete('/enrollments/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('training_enrollments').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'training_enrollment',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -175,6 +212,12 @@ router.post('/aar', async (req: Request, res: Response, next: NextFunction) => {
     const [item] = await db('after_action_reports').insert({
       id: uuid(), ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'after_action_report',
+      entityId: item.id,
+      title: item.title || 'New AAR',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -186,6 +229,12 @@ router.put('/aar/:id', async (req: Request, res: Response, next: NextFunction) =
       .update({ ...req.body })
       .returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'after_action_report',
+      entityId: item.id,
+      title: item.title || 'Updated AAR',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -193,6 +242,12 @@ router.put('/aar/:id', async (req: Request, res: Response, next: NextFunction) =
 router.delete('/aar/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('after_action_reports').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'after_action_report',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

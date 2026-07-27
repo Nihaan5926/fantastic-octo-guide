@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -58,6 +59,12 @@ router.post('/investigations', async (req: Request, res: Response, next: NextFun
       lead_investigator_id: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'ci_investigation',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New investigation',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -67,6 +74,12 @@ router.put('/investigations/:id', async (req: Request, res: Response, next: Next
     const [item] = await db('ci_investigations')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Investigation not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'ci_investigation',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated investigation',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -74,6 +87,12 @@ router.put('/investigations/:id', async (req: Request, res: Response, next: Next
 router.delete('/investigations/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('ci_investigations').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'ci_investigation',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -116,6 +135,12 @@ router.get('/foreign-agents/:id', async (req: Request, res: Response, next: Next
 router.post('/foreign-agents', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('ci_foreign_agents').insert({ id: uuid(), ...req.body }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'ci_foreign_agent',
+      entityId: item.id,
+      title: item.name || 'New foreign agent',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -125,6 +150,12 @@ router.put('/foreign-agents/:id', async (req: Request, res: Response, next: Next
     const [item] = await db('ci_foreign_agents')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Foreign agent not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'ci_foreign_agent',
+      entityId: item.id,
+      title: item.name || 'Updated foreign agent',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -132,6 +163,12 @@ router.put('/foreign-agents/:id', async (req: Request, res: Response, next: Next
 router.delete('/foreign-agents/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('ci_foreign_agents').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'ci_foreign_agent',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -186,6 +223,12 @@ router.post('/insider-threats', async (req: Request, res: Response, next: NextFu
       reported_by: req.user!.userId,
       ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'ci_insider_threat',
+      entityId: item.id,
+      title: item.description || 'New insider threat',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -195,6 +238,12 @@ router.put('/insider-threats/:id', async (req: Request, res: Response, next: Nex
     const [item] = await db('ci_insider_threats')
       .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Insider threat not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'ci_insider_threat',
+      entityId: item.id,
+      title: item.description || 'Updated insider threat',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -202,6 +251,12 @@ router.put('/insider-threats/:id', async (req: Request, res: Response, next: Nex
 router.delete('/insider-threats/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('ci_insider_threats').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'ci_insider_threat',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -55,6 +56,12 @@ router.post('/channels', async (req: Request, res: Response, next: NextFunction)
     const [item] = await db('message_channels').insert({
       id: uuid(), created_by: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'message_channel',
+      entityId: item.id,
+      title: item.name || 'New channel',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -64,6 +71,12 @@ router.put('/channels/:id', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('message_channels').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Channel not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'message_channel',
+      entityId: item.id,
+      title: item.name || 'Updated channel',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -71,6 +84,12 @@ router.put('/channels/:id', async (req: Request, res: Response, next: NextFuncti
 router.delete('/channels/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('message_channels').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'message_channel',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Channel deleted' });
   } catch (e) { next(e); }
 });
@@ -160,6 +179,12 @@ router.post('/messages', async (req: Request, res: Response, next: NextFunction)
     const [item] = await db('secure_messages').insert({
       id: uuid(), sender_id: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'secure_message',
+      entityId: item.id,
+      title: item.subject || 'New message',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -169,6 +194,12 @@ router.put('/messages/:id', async (req: Request, res: Response, next: NextFuncti
     const [item] = await db('secure_messages').where({ id: req.params.id })
       .update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Message not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'secure_message',
+      entityId: item.id,
+      title: item.subject || 'Updated message',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -176,6 +207,12 @@ router.put('/messages/:id', async (req: Request, res: Response, next: NextFuncti
 router.delete('/messages/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('secure_messages').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'secure_message',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });

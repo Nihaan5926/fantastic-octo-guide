@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -67,6 +68,12 @@ router.post('/records', async (req: Request, res: Response, next: NextFunction) 
       ...req.body,
       archived_by: req.user!.userId,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'archive_record',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'New record',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -76,6 +83,12 @@ router.put('/records/:id', async (req: Request, res: Response, next: NextFunctio
     const [item] = await db('archive_records').where({ id: req.params.id })
       .update({ ...req.body }).returning('*');
     if (!item) { res.status(404).json({ error: 'Record not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'archive_record',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated record',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -83,6 +96,12 @@ router.put('/records/:id', async (req: Request, res: Response, next: NextFunctio
 router.delete('/records/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('archive_records').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'archive_record',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
@@ -146,6 +165,12 @@ router.post('/declassification', async (req: Request, res: Response, next: NextF
     const [item] = await db('declassification_requests').insert({
       id: uuid(), requested_by: req.user!.userId, ...req.body,
     }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'declassification_request',
+      entityId: item.id,
+      title: item.reason || 'New declassification request',
+      userId: req.user!.userId,
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
@@ -155,6 +180,12 @@ router.put('/declassification/:id', async (req: Request, res: Response, next: Ne
     const [item] = await db('declassification_requests').where({ id: req.params.id })
       .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Request not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'declassification_request',
+      entityId: item.id,
+      title: item.reason || 'Updated declassification request',
+      userId: req.user!.userId,
+    });
     res.json(item);
   } catch (e) { next(e); }
 });
@@ -162,6 +193,12 @@ router.put('/declassification/:id', async (req: Request, res: Response, next: Ne
 router.delete('/declassification/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await db('declassification_requests').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'declassification_request',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
     res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
