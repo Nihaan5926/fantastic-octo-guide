@@ -11,7 +11,7 @@ const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS = 5;
 
 const GENERAL_WINDOW_MS = 60 * 1000;
-const GENERAL_MAX_REQUESTS = 100;
+const GENERAL_MAX_REQUESTS = 500;
 
 setInterval(() => {
   const now = Date.now();
