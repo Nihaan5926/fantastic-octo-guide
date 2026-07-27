@@ -1,6 +1,5 @@
 #!/bin/sh
 # ─── Intel Platform Startup Script ───
-# Runs database migrations then starts the server
 
 echo "[Startup] Waiting for PostgreSQL..."
 RETRIES=30
@@ -28,13 +27,26 @@ done
 echo "[Startup] Running database migrations..."
 node dist/db/migrate.js up
 
-echo "[Startup] Running first-run seed..."
+echo "[Startup] Running first-run seed (admin user)..."
 node dist/db/seed-minimal.js
 
+echo "[Startup] Starting server in background..."
+node dist/app.js &
+SERVER_PID=$!
+
+echo "[Startup] Waiting for server to be ready..."
+for i in $(seq 1 30); do
+  if node -e "const http=require('http');http.get('http://localhost:${PORT:-4000}/api/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1));" 2>/dev/null; then
+    echo "[Startup] Server is ready."
+    break
+  fi
+  sleep 1
+done
+
 if [ "$RUN_SEEDS" = "true" ]; then
-  echo "[Startup] Running full seed..."
-  node dist/db/seed.js
+  echo "[Startup] Seeding demo data into all modules..."
+  node scripts/seed-all.js
 fi
 
-echo "[Startup] Starting server on port ${PORT:-4000}..."
-exec node dist/app.js
+echo "[Startup] Bringing server to foreground..."
+wait $SERVER_PID

@@ -44,6 +44,8 @@ services:
       - MAX_FILE_SIZE=${MAX_FILE_SIZE:-52428800}
       - CLIENT_DIST=/app/public
       - UPLOAD_DIR=/app/uploads
+      - RUN_SEEDS=${RUN_SEEDS:-true}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123!}
     volumes:
       - uploads:/app/uploads
     depends_on:
