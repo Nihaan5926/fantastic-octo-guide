@@ -86,7 +86,7 @@ async function seed() {
   for (const p of [
     { user_id: uid, position_title: 'Senior Intelligence Analyst', clearance_level: 'TOP_SECRET', nationality: 'US', notes: '15 years experience, regional expert' },
     { user_id: uid, position_title: 'Deputy Director of Operations', clearance_level: 'TOP_SECRET', nationality: 'US', notes: 'Former special forces commander' },
-  ]) { try { await api.post('/personnel', { ...p, user_id: uid + Date.now().toString().slice(-4) }); } catch(e) { try { await api.post('/personnel', p); logOk(p.position_title); } catch(e2) { logFail(p.position_title, e2); } } }
+  ]) { try { await api.post('/personnel', p); logOk(p.position_title); } catch(e2) { logFail(p.position_title, e2); } }
 
   // Org Chart
   console.log('--- Org Chart ---');
