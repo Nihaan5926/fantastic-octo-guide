@@ -9,20 +9,7 @@ import { FormInput, FormSelect, FormTextarea } from '../../../components/common/
 import { StatusBadge, ClassificationBadge } from '../../../components/common/Badges';
 import { useMessagingStore } from '../store';
 
-const classificationOpts = [
-  { value: 'UNCLASSIFIED', label: 'UNCLASSIFIED' },
-  { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
-  { value: 'SECRET', label: 'SECRET' },
-  { value: 'TOP_SECRET', label: 'TOP SECRET' },
-];
-
-const channelStatusOpts = [
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'ARCHIVED', label: 'Archived' },
-  { value: 'DISABLED', label: 'Disabled' },
-];
-
-const defaultChannel = { name: '', description: '', classification: 'UNCLASSIFIED', status: 'ACTIVE' };
+const defaultChannel = { name: '', description: '', channel_type: 'TEAM' };
 
 export default function MessagesList() {
   const store = useMessagingStore();
@@ -59,7 +46,7 @@ export default function MessagesList() {
 
   const handleChannelEdit = (channel: any) => {
     setEditChannel(channel);
-    setChannelForm({ name: channel.name, description: channel.description || '', classification: channel.classification, status: channel.status });
+    setChannelForm({ name: channel.name, description: channel.description || '', channel_type: channel.channel_type || 'TEAM' });
     setChannelModal(true);
   };
 
@@ -221,8 +208,7 @@ export default function MessagesList() {
           <FormInput label="Name" required value={channelForm.name} onChange={(e) => setChannelForm({ ...channelForm, name: e.target.value })} />
           <FormTextarea label="Description" value={channelForm.description} onChange={(e) => setChannelForm({ ...channelForm, description: e.target.value })} />
           <div className="grid grid-cols-2 gap-4">
-            <FormSelect label="Classification" options={classificationOpts} value={channelForm.classification} onChange={(e) => setChannelForm({ ...channelForm, classification: e.target.value })} />
-            <FormSelect label="Status" options={channelStatusOpts} value={channelForm.status} onChange={(e) => setChannelForm({ ...channelForm, status: e.target.value })} />
+            <FormSelect label="Channel Type" options={[{ value: 'TEAM', label: 'Team' }, { value: 'BROADCAST', label: 'Broadcast' }, { value: 'DIRECT', label: 'Direct' }]} value={channelForm.channel_type} onChange={(e) => setChannelForm({ ...channelForm, channel_type: e.target.value })} />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
