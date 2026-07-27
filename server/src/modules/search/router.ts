@@ -80,7 +80,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     // Targeting Packages
-    const targets = await db('targeting/packages')
+    const targets = await db('target_packages')
       .select('id', 'title', 'target_name')
       .whereRaw('title ILIKE ? OR target_name ILIKE ?', [term, term])
       .limit(3);
@@ -89,7 +89,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     // Collection Requirements
-    const collReqs = await db('collection/requirements')
+    const collReqs = await db('collection_requirements')
       .select('id', 'title', 'description')
       .whereRaw('title ILIKE ? OR description ILIKE ?', [term, term])
       .limit(3);
@@ -98,7 +98,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     // Collection Assets
-    const assets = await db('collection/assets')
+    const assets = await db('collection_assets')
       .select('id', 'name', 'platform')
       .whereRaw('name ILIKE ? OR platform ILIKE ?', [term, term])
       .limit(3);
@@ -107,7 +107,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     // Tasking Assignments
-    const tasks = await db('tasking/assignments')
+    const tasks = await db('tasking_assignments')
       .select('id', 'title', 'description')
       .whereRaw('title ILIKE ? OR description ILIKE ?', [term, term])
       .limit(3);
@@ -242,7 +242,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     // Watch Center SITREPs
-    const sitreps = await db('watch-center/sitreps')
+    const sitreps = await db('sitreps')
       .select('id', 'title')
       .whereRaw('title ILIKE ?', [term])
       .limit(3);

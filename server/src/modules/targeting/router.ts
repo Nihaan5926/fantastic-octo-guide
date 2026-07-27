@@ -8,7 +8,7 @@ import { v4 as uuid } from 'uuid';
 const router = Router();
 router.use(authenticate);
 
-// ── Target Packages CRUD ──
+// ── Target Packages Collection ──
 
 router.get('/packages', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -44,23 +44,6 @@ router.get('/packages', async (req: Request, res: Response, next: NextFunction) 
   } catch (e) { next(e); }
 });
 
-router.get('/packages/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('target_packages')
-      .select(
-        'target_packages.*',
-        'author.first_name as author_first', 'author.last_name as author_last',
-        'approver.first_name as approved_by_first', 'approver.last_name as approved_by_last',
-      )
-      .leftJoin('users as author', 'target_packages.author_id', 'author.id')
-      .leftJoin('users as approver', 'target_packages.approved_by', 'approver.id')
-      .where('target_packages.id', req.params.id)
-      .first();
-    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
 router.post('/packages', auditLog('target:create', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ref = `TGT-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(5, '0')}`;
@@ -77,34 +60,6 @@ router.post('/packages', auditLog('target:create', 'target_package'), async (req
       userId: req.user!.userId,
     });
     res.status(201).json(item);
-  } catch (e) { next(e); }
-});
-
-router.put('/packages/:id', auditLog('target:update', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [item] = await db('target_packages')
-      .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
-    eventBus.emit('entity:updated', {
-      entityType: 'target_package',
-      entityId: item.id,
-      title: item.title || item.reference_number || 'Updated target package',
-      userId: req.user!.userId,
-    });
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/packages/:id', auditLog('target:delete', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await db('target_packages').where({ id: req.params.id }).del();
-    eventBus.emit('entity:deleted', {
-      entityType: 'target_package',
-      entityId: req.params.id,
-      title: req.params.id,
-      userId: req.user!.userId,
-    });
-    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 
@@ -141,43 +96,7 @@ router.post('/packages/:packageId/nominations', auditLog('target:nominate', 'tar
   } catch (e) { next(e); }
 });
 
-router.put('/nominations/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [item] = await db('target_nominations')
-      .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Nomination not found' }); return; }
-    eventBus.emit('entity:updated', {
-      entityType: 'target_nomination',
-      entityId: item.id,
-      title: item.target_name || 'Updated nomination',
-      userId: req.user!.userId,
-    });
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/nominations/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await db('target_nominations').where({ id: req.params.id }).del();
-    eventBus.emit('entity:deleted', {
-      entityType: 'target_nomination',
-      entityId: req.params.id,
-      title: req.params.id,
-      userId: req.user!.userId,
-    });
-    res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
-});
-
-// ── Targeting Lifecycle ──
-
-const LIFECYCLE: Record<string, string> = {
-  DRAFT: 'NOMINATED',
-  NOMINATED: 'VETTED',
-  VETTED: 'APPROVED',
-  APPROVED: 'EXECUTED',
-  EXECUTED: 'ASSESSED',
-};
+// ── Targeting Lifecycle Sub-Routes (must come before generic /:id) ──
 
 router.put('/packages/:id/nominate', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -265,6 +184,83 @@ router.put('/packages/:id/assess', async (req: Request, res: Response, next: Nex
       .returning('*');
     eventBus.emit('entity:updated', { entityType: 'target_package', entityId: updated.id, title: updated.title || updated.reference_number, userId: req.user!.userId });
     res.json(updated);
+  } catch (e) { next(e); }
+});
+
+// ── Generic Target Package Routes (must come LAST among same method) ──
+
+router.get('/packages/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('target_packages')
+      .select(
+        'target_packages.*',
+        'author.first_name as author_first', 'author.last_name as author_last',
+        'approver.first_name as approved_by_first', 'approver.last_name as approved_by_last',
+      )
+      .leftJoin('users as author', 'target_packages.author_id', 'author.id')
+      .leftJoin('users as approver', 'target_packages.approved_by', 'approver.id')
+      .where('target_packages.id', req.params.id)
+      .first();
+    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/packages/:id', auditLog('target:update', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('target_packages')
+      .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Target package not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'target_package',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated target package',
+      userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/packages/:id', auditLog('target:delete', 'target_package'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('target_packages').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'target_package',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+// ── Nomination CRUD (separate base, no conflict) ──
+
+router.put('/nominations/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('target_nominations')
+      .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Nomination not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'target_nomination',
+      entityId: item.id,
+      title: item.target_name || 'Updated nomination',
+      userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/nominations/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('target_nominations').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'target_nomination',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 

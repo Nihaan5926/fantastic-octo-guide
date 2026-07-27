@@ -22,6 +22,8 @@ const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }
 const router = Router();
 router.use(authenticate);
 
+// ── Collection Routes ──
+
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -49,18 +51,6 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   } catch (e) { next(e); }
 });
 
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('intelligence_reports')
-      .select('intelligence_reports.*', 'users.first_name as author_first', 'users.last_name as author_last')
-      .leftJoin('users', 'intelligence_reports.author_id', 'users.id')
-      .where('intelligence_reports.id', req.params.id)
-      .first();
-    if (!item) { res.status(404).json({ error: 'Report not found' }); return; }
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
 router.post('/', auditLog('report:create', 'report'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = sanitizeInput(req.body);
@@ -84,42 +74,7 @@ router.post('/', auditLog('report:create', 'report'), async (req: Request, res: 
   } catch (e) { next(e); }
 });
 
-router.put('/:id', auditLog('report:update', 'report'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const body = sanitizeInput(req.body);
-    const [item] = await db('intelligence_reports')
-      .where({ id: req.params.id }).update({ ...body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Report not found' }); return; }
-    logger.info(`Report updated: ${item.title || item.reference_number}`, { reportId: item.id });
-
-    eventBus.emit('entity:updated', {
-      entityType: 'report',
-      entityId: item.id,
-      title: item.title || item.reference_number,
-      userId: req.user!.userId,
-    });
-
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/:id', auditLog('report:delete', 'report'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const existing = await db('intelligence_reports').where({ id: req.params.id }).first();
-    await db('intelligence_reports').where({ id: req.params.id }).del();
-
-    if (existing) {
-      eventBus.emit('entity:deleted', {
-        entityType: 'report',
-        entityId: req.params.id,
-        title: existing.title || existing.reference_number,
-        userId: req.user!.userId,
-      });
-    }
-
-    res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
-});
+// ── Sub-Routes (must come before generic /:id) ──
 
 router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -318,6 +273,57 @@ router.put('/:id/reject', authorize('reports:approve'), auditLog('report:reject'
       title: item.title || item.reference_number, userId: req.user!.userId,
     });
     res.json(item);
+  } catch (e) { next(e); }
+});
+
+// ── Generic Routes (must come LAST among same method) ──
+
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('intelligence_reports')
+      .select('intelligence_reports.*', 'users.first_name as author_first', 'users.last_name as author_last')
+      .leftJoin('users', 'intelligence_reports.author_id', 'users.id')
+      .where('intelligence_reports.id', req.params.id)
+      .first();
+    if (!item) { res.status(404).json({ error: 'Report not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/:id', auditLog('report:update', 'report'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = sanitizeInput(req.body);
+    const [item] = await db('intelligence_reports')
+      .where({ id: req.params.id }).update({ ...body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Report not found' }); return; }
+    logger.info(`Report updated: ${item.title || item.reference_number}`, { reportId: item.id });
+
+    eventBus.emit('entity:updated', {
+      entityType: 'report',
+      entityId: item.id,
+      title: item.title || item.reference_number,
+      userId: req.user!.userId,
+    });
+
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/:id', auditLog('report:delete', 'report'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const existing = await db('intelligence_reports').where({ id: req.params.id }).first();
+    await db('intelligence_reports').where({ id: req.params.id }).del();
+
+    if (existing) {
+      eventBus.emit('entity:deleted', {
+        entityType: 'report',
+        entityId: req.params.id,
+        title: existing.title || existing.reference_number,
+        userId: req.user!.userId,
+      });
+    }
+
+    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 

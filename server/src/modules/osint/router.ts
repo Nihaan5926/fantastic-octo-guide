@@ -107,6 +107,8 @@ export function stopScheduler() {
   }
 }
 
+// ── Collection Routes ──
+
 router.get('/tasks', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -126,14 +128,6 @@ router.get('/tasks', async (req: Request, res: Response, next: NextFunction) => 
   } catch (e) { next(e); }
 });
 
-router.get('/tasks/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('osint_collection_tasks').where({ id: req.params.id }).first();
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
 router.post('/tasks', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [item] = await db('osint_collection_tasks').insert({
@@ -149,33 +143,7 @@ router.post('/tasks', async (req: Request, res: Response, next: NextFunction) =>
   } catch (e) { next(e); }
 });
 
-router.put('/tasks/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [item] = await db('osint_collection_tasks').where({ id: req.params.id })
-      .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-    eventBus.emit('entity:updated', {
-      entityType: 'osint_task',
-      entityId: item.id,
-      title: item.title || 'Updated OSINT task',
-      userId: req.user!.userId,
-    });
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/tasks/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await db('osint_collection_tasks').where({ id: req.params.id }).del();
-    eventBus.emit('entity:deleted', {
-      entityType: 'osint_task',
-      entityId: req.params.id,
-      title: req.params.id,
-      userId: req.user!.userId,
-    });
-    res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
-});
+// ── Sub-Routes (must come before generic /:id) ──
 
 router.post('/tasks/:id/run', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -259,6 +227,44 @@ router.put('/tasks/:id/schedule', async (req: Request, res: Response, next: Next
 
     const [updated] = await db('osint_collection_tasks').where({ id: req.params.id }).returning('*');
     res.json(updated);
+  } catch (e) { next(e); }
+});
+
+// ── Generic Routes (must come LAST among same method) ──
+
+router.get('/tasks/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('osint_collection_tasks').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/tasks/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('osint_collection_tasks').where({ id: req.params.id })
+      .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'osint_task',
+      entityId: item.id,
+      title: item.title || 'Updated OSINT task',
+      userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/tasks/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('osint_collection_tasks').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'osint_task',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 

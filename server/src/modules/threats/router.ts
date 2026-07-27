@@ -19,7 +19,8 @@ const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }
 const router = Router();
 router.use(authenticate);
 
-// Threat Actors
+// ── Threat Actors Collection ──
+
 router.get('/actors', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -43,24 +44,6 @@ router.get('/actors', async (req: Request, res: Response, next: NextFunction) =>
   } catch (e) { next(e); }
 });
 
-router.get('/actors/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('threat_actors').where({ id: req.params.id }).first();
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-    const indicators = await db('indicators').where({ threat_actor_id: req.params.id });
-    res.json({ ...item, indicators });
-  } catch (e) { next(e); }
-});
-
-function calculateRiskScore(sophistication: string | null, indicators: any[]): number {
-  const sophisticationWeight: Record<string, number> = { LOW: 20, MEDIUM: 50, HIGH: 80, ADVANCED: 90, NATION_STATE: 100 };
-  const sophWeight = sophisticationWeight[sophistication || ''] || 20;
-  if (indicators.length === 0) return Math.round(sophWeight * 0.6);
-  const confidenceOrder: Record<string, number> = { LOW: 25, MEDIUM: 50, HIGH: 75, CRITICAL: 100 };
-  const avgConf = indicators.reduce((sum: number, ind: any) => sum + (confidenceOrder[ind.confidence] || 25), 0) / indicators.length;
-  return Math.round(sophWeight * 0.5 + avgConf * 0.5);
-}
-
 router.post('/actors', auditLog('threat_actor:create', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = { ...req.body };
@@ -78,87 +61,7 @@ router.post('/actors', auditLog('threat_actor:create', 'threat_actor'), async (r
   } catch (e) { next(e); }
 });
 
-router.put('/actors/:id', auditLog('threat_actor:update', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [item] = await db('threat_actors').where({ id: req.params.id })
-      .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-    const indicators = await db('indicators').where({ threat_actor_id: req.params.id });
-    const riskScore = calculateRiskScore(item.sophistication, indicators);
-    const currentMeta = typeof item.metadata === 'string' ? JSON.parse(item.metadata || '{}') : (item.metadata || {});
-    await db('threat_actors').where({ id: item.id }).update({ metadata: JSON.stringify({ ...currentMeta, risk_score: riskScore }) });
-    eventBus.emit('entity:updated', {
-      entityType: 'threat_actor',
-      entityId: item.id,
-      title: item.name || 'Updated threat actor',
-      userId: req.user!.userId,
-    });
-    res.json({ ...item, risk_score: riskScore });
-  } catch (e) { next(e); }
-});
-
-router.delete('/actors/:id', auditLog('threat_actor:delete', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await db('threat_actors').where({ id: req.params.id }).del();
-    eventBus.emit('entity:deleted', {
-      entityType: 'threat_actor',
-      entityId: req.params.id,
-      title: req.params.id,
-      userId: req.user!.userId,
-    });
-    res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
-});
-
-// Indicators
-router.get('/indicators', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = (page - 1) * limit;
-    const { type, search } = req.query;
-
-    let query = db('indicators')
-      .select('indicators.*', 'threat_actors.name as actor_name')
-      .leftJoin('threat_actors', 'indicators.threat_actor_id', 'threat_actors.id');
-
-    if (type) query = query.where('indicators.type', type);
-    if (search) query = query.where('indicators.value', 'ilike', `%${search}%`);
-
-    const [items, total] = await Promise.all([
-      query.clone().orderBy('indicators.created_at', 'desc').limit(limit).offset(offset),
-      query.clone().clearSelect().count('indicators.id').first().then((r: any) => parseInt(r.count, 10)),
-    ]);
-
-    res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-  } catch (e) { next(e); }
-});
-
-router.post('/indicators', auditLog('indicator:create', 'indicator'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [item] = await db('indicators').insert({ id: uuid(), ...req.body }).returning('*');
-    eventBus.emit('entity:created', {
-      entityType: 'indicator',
-      entityId: item.id,
-      title: item.value || 'New indicator',
-      userId: req.user!.userId,
-    });
-    res.status(201).json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/indicators/:id', auditLog('indicator:delete', 'indicator'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await db('indicators').where({ id: req.params.id }).del();
-    eventBus.emit('entity:deleted', {
-      entityType: 'indicator',
-      entityId: req.params.id,
-      title: req.params.id,
-      userId: req.user!.userId,
-    });
-    res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
-});
+// ── Sub-Routes (must come before generic /:id) ──
 
 router.get('/actors/:id/relationships', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -311,5 +214,108 @@ router.post('/actors/:id/calculate-risk', async (req: Request, res: Response, ne
     res.json({ risk_score: riskScore, breakdown });
   } catch (e) { next(e); }
 });
+
+// ── Generic Threat Actor Routes (must come LAST among same method) ──
+
+router.get('/actors/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('threat_actors').where({ id: req.params.id }).first();
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    const indicators = await db('indicators').where({ threat_actor_id: req.params.id });
+    res.json({ ...item, indicators });
+  } catch (e) { next(e); }
+});
+
+router.put('/actors/:id', auditLog('threat_actor:update', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('threat_actors').where({ id: req.params.id })
+      .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    const indicators = await db('indicators').where({ threat_actor_id: req.params.id });
+    const riskScore = calculateRiskScore(item.sophistication, indicators);
+    const currentMeta = typeof item.metadata === 'string' ? JSON.parse(item.metadata || '{}') : (item.metadata || {});
+    await db('threat_actors').where({ id: item.id }).update({ metadata: JSON.stringify({ ...currentMeta, risk_score: riskScore }) });
+    eventBus.emit('entity:updated', {
+      entityType: 'threat_actor',
+      entityId: item.id,
+      title: item.name || 'Updated threat actor',
+      userId: req.user!.userId,
+    });
+    res.json({ ...item, risk_score: riskScore });
+  } catch (e) { next(e); }
+});
+
+router.delete('/actors/:id', auditLog('threat_actor:delete', 'threat_actor'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('threat_actors').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'threat_actor',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+// ── Indicators ──
+
+router.get('/indicators', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
+    const { type, search } = req.query;
+
+    let query = db('indicators')
+      .select('indicators.*', 'threat_actors.name as actor_name')
+      .leftJoin('threat_actors', 'indicators.threat_actor_id', 'threat_actors.id');
+
+    if (type) query = query.where('indicators.type', type);
+    if (search) query = query.where('indicators.value', 'ilike', `%${search}%`);
+
+    const [items, total] = await Promise.all([
+      query.clone().orderBy('indicators.created_at', 'desc').limit(limit).offset(offset),
+      query.clone().clearSelect().count('indicators.id').first().then((r: any) => parseInt(r.count, 10)),
+    ]);
+
+    res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (e) { next(e); }
+});
+
+router.post('/indicators', auditLog('indicator:create', 'indicator'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('indicators').insert({ id: uuid(), ...req.body }).returning('*');
+    eventBus.emit('entity:created', {
+      entityType: 'indicator',
+      entityId: item.id,
+      title: item.value || 'New indicator',
+      userId: req.user!.userId,
+    });
+    res.status(201).json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/indicators/:id', auditLog('indicator:delete', 'indicator'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('indicators').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'indicator',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+function calculateRiskScore(sophistication: string | null, indicators: any[]): number {
+  const sophisticationWeight: Record<string, number> = { LOW: 20, MEDIUM: 50, HIGH: 80, ADVANCED: 90, NATION_STATE: 100 };
+  const sophWeight = sophisticationWeight[sophistication || ''] || 20;
+  if (indicators.length === 0) return Math.round(sophWeight * 0.6);
+  const confidenceOrder: Record<string, number> = { LOW: 25, MEDIUM: 50, HIGH: 75, CRITICAL: 100 };
+  const avgConf = indicators.reduce((sum: number, ind: any) => sum + (confidenceOrder[ind.confidence] || 25), 0) / indicators.length;
+  return Math.round(sophWeight * 0.5 + avgConf * 0.5);
+}
 
 export default router;

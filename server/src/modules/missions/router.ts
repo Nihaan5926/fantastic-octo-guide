@@ -19,7 +19,7 @@ const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }
 const router = Router();
 router.use(authenticate);
 
-// ── Mission Plans CRUD ──
+// ── Mission Plans Collection ──
 
 router.get('/plans', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -54,23 +54,6 @@ router.get('/plans', async (req: Request, res: Response, next: NextFunction) => 
   } catch (e) { next(e); }
 });
 
-router.get('/plans/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('mission_plans')
-      .select(
-        'mission_plans.*',
-        'cmd.first_name as commander_first', 'cmd.last_name as commander_last',
-        'analyst.first_name as lead_analyst_first', 'analyst.last_name as lead_analyst_last',
-      )
-      .leftJoin('users as cmd', 'mission_plans.commander_id', 'cmd.id')
-      .leftJoin('users as analyst', 'mission_plans.lead_analyst_id', 'analyst.id')
-      .where('mission_plans.id', req.params.id)
-      .first();
-    if (!item) { res.status(404).json({ error: 'Mission plan not found' }); return; }
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
 router.post('/plans', auditLog('mission:create', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ref = `MSP-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(5, '0')}`;
@@ -86,34 +69,6 @@ router.post('/plans', auditLog('mission:create', 'mission_plan'), async (req: Re
       userId: req.user!.userId,
     });
     res.status(201).json(item);
-  } catch (e) { next(e); }
-});
-
-router.put('/plans/:id', auditLog('mission:update', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [item] = await db('mission_plans')
-      .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Mission plan not found' }); return; }
-    eventBus.emit('entity:updated', {
-      entityType: 'mission_plan',
-      entityId: item.id,
-      title: item.title || item.reference_number || 'Updated mission',
-      userId: req.user!.userId,
-    });
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/plans/:id', auditLog('mission:delete', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await db('mission_plans').where({ id: req.params.id }).del();
-    eventBus.emit('entity:deleted', {
-      entityType: 'mission_plan',
-      entityId: req.params.id,
-      title: req.params.id,
-      userId: req.user!.userId,
-    });
-    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 
@@ -263,6 +218,8 @@ router.delete('/plans/:planId/debriefs/:id', async (req: Request, res: Response,
   } catch (e) { next(e); }
 });
 
+// ── Attachments (must come before generic /:id) ──
+
 router.get('/plans/:id/attachments', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const attachments = await db('entity_attachments')
@@ -309,6 +266,53 @@ router.delete('/plans/:id/attachments/:aid', async (req: Request, res: Response,
       .where({ id: req.params.aid, entity_type: 'mission_plan', entity_id: req.params.id })
       .del();
     res.json({ message: 'Attachment removed' });
+  } catch (e) { next(e); }
+});
+
+// ── Generic Mission Plan Routes (must come LAST among same method) ──
+
+router.get('/plans/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('mission_plans')
+      .select(
+        'mission_plans.*',
+        'cmd.first_name as commander_first', 'cmd.last_name as commander_last',
+        'analyst.first_name as lead_analyst_first', 'analyst.last_name as lead_analyst_last',
+      )
+      .leftJoin('users as cmd', 'mission_plans.commander_id', 'cmd.id')
+      .leftJoin('users as analyst', 'mission_plans.lead_analyst_id', 'analyst.id')
+      .where('mission_plans.id', req.params.id)
+      .first();
+    if (!item) { res.status(404).json({ error: 'Mission plan not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/plans/:id', auditLog('mission:update', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('mission_plans')
+      .where({ id: req.params.id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Mission plan not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'mission_plan',
+      entityId: item.id,
+      title: item.title || item.reference_number || 'Updated mission',
+      userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/plans/:id', auditLog('mission:delete', 'mission_plan'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db('mission_plans').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'mission_plan',
+      entityId: req.params.id,
+      title: req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 

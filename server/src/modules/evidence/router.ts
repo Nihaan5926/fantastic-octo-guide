@@ -97,6 +97,8 @@ function buildMetadata(file: Express.Multer.File): Record<string, any> {
   return meta;
 }
 
+// ── Collection Routes ──
+
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -118,18 +120,6 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     ]);
 
     res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-  } catch (e) { next(e); }
-});
-
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('evidence')
-      .select('evidence.*', 'users.first_name as uploader_first', 'users.last_name as uploader_last')
-      .leftJoin('users', 'evidence.uploaded_by', 'users.id')
-      .where('evidence.id', req.params.id)
-      .first();
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-    res.json(item);
   } catch (e) { next(e); }
 });
 
@@ -172,6 +162,8 @@ router.post('/', auditLog('evidence:upload', 'evidence'), upload.single('file'),
     res.status(201).json(item);
   } catch (e) { next(e); }
 });
+
+// ── Sub-Routes (must come before generic /:id) ──
 
 router.get('/:id/download', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -222,39 +214,6 @@ router.post('/:id/custody', async (req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e); }
 });
 
-router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [item] = await db('evidence').where({ id: req.params.id })
-      .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-    eventBus.emit('entity:updated', {
-      entityType: 'evidence',
-      entityId: item.id,
-      title: item.title || 'Updated evidence',
-      userId: req.user!.userId,
-    });
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/:id', auditLog('evidence:delete', 'evidence'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('evidence').where({ id: req.params.id }).first();
-    if (item?.file_path) {
-      const filePath = path.join(config.upload.dir, item.file_path);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    }
-    await db('evidence').where({ id: req.params.id }).del();
-    eventBus.emit('entity:deleted', {
-      entityType: 'evidence',
-      entityId: req.params.id,
-      title: item?.title || req.params.id,
-      userId: req.user!.userId,
-    });
-    res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
-});
-
 // ── Integrity Verification ──
 
 router.get('/:id/verify', async (req: Request, res: Response, next: NextFunction) => {
@@ -285,6 +244,53 @@ router.get('/:id/verify', async (req: Request, res: Response, next: NextFunction
     const valid = storedHash !== null && storedHash === computedHash;
 
     res.json({ valid, storedHash, computedHash });
+  } catch (e) { next(e); }
+});
+
+// ── Generic Routes (must come LAST among same method) ──
+
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('evidence')
+      .select('evidence.*', 'users.first_name as uploader_first', 'users.last_name as uploader_last')
+      .leftJoin('users', 'evidence.uploaded_by', 'users.id')
+      .where('evidence.id', req.params.id)
+      .first();
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [item] = await db('evidence').where({ id: req.params.id })
+      .update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    eventBus.emit('entity:updated', {
+      entityType: 'evidence',
+      entityId: item.id,
+      title: item.title || 'Updated evidence',
+      userId: req.user!.userId,
+    });
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/:id', auditLog('evidence:delete', 'evidence'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('evidence').where({ id: req.params.id }).first();
+    if (item?.file_path) {
+      const filePath = path.join(config.upload.dir, item.file_path);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await db('evidence').where({ id: req.params.id }).del();
+    eventBus.emit('entity:deleted', {
+      entityType: 'evidence',
+      entityId: req.params.id,
+      title: item?.title || req.params.id,
+      userId: req.user!.userId,
+    });
+    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 

@@ -21,6 +21,8 @@ const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }
 const router = Router();
 router.use(authenticate);
 
+// ── Collection Routes ──
+
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -47,23 +49,6 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   } catch (e) { next(e); }
 });
 
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const item = await db('cases')
-      .select('cases.*', 'users.first_name as lead_first', 'users.last_name as lead_last')
-      .leftJoin('users', 'cases.lead_analyst_id', 'users.id')
-      .where('cases.id', req.params.id).first();
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-
-    const members = await db('case_members')
-      .select('case_members.*', 'users.first_name', 'users.last_name', 'users.email')
-      .leftJoin('users', 'case_members.user_id', 'users.id')
-      .where('case_members.case_id', req.params.id);
-
-    res.json({ ...item, members });
-  } catch (e) { next(e); }
-});
-
 router.post('/', auditLog('case:create', 'case'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = sanitizeInput(req.body);
@@ -84,42 +69,7 @@ router.post('/', auditLog('case:create', 'case'), async (req: Request, res: Resp
   } catch (e) { next(e); }
 });
 
-router.put('/:id', auditLog('case:update', 'case'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const body = sanitizeInput(req.body);
-    const [item] = await db('cases').where({ id: req.params.id })
-      .update({ ...body, updated_at: db.fn.now() }).returning('*');
-    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
-    logger.info(`Case updated: ${item.title || item.reference_number}`, { caseId: item.id });
-
-    eventBus.emit('entity:updated', {
-      entityType: 'case',
-      entityId: item.id,
-      title: item.title || item.reference_number,
-      userId: req.user!.userId,
-    });
-
-    res.json(item);
-  } catch (e) { next(e); }
-});
-
-router.delete('/:id', auditLog('case:delete', 'case'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const existing = await db('cases').where({ id: req.params.id }).first();
-    await db('cases').where({ id: req.params.id }).del();
-
-    if (existing) {
-      eventBus.emit('entity:deleted', {
-        entityType: 'case',
-        entityId: req.params.id,
-        title: existing.title || existing.reference_number,
-        userId: req.user!.userId,
-      });
-    }
-
-    res.json({ message: 'Deleted' });
-  } catch (e) { next(e); }
-});
+// ── Sub-Routes (must come before generic /:id) ──
 
 router.post('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -209,6 +159,62 @@ router.delete('/:id/attachments/:aid', async (req: Request, res: Response, next:
       .where({ id: req.params.aid, entity_type: 'case', entity_id: req.params.id })
       .del();
     res.json({ message: 'Attachment removed' });
+  } catch (e) { next(e); }
+});
+
+// ── Generic Routes (must come LAST among same method) ──
+
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const item = await db('cases')
+      .select('cases.*', 'users.first_name as lead_first', 'users.last_name as lead_last')
+      .leftJoin('users', 'cases.lead_analyst_id', 'users.id')
+      .where('cases.id', req.params.id).first();
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+
+    const members = await db('case_members')
+      .select('case_members.*', 'users.first_name', 'users.last_name', 'users.email')
+      .leftJoin('users', 'case_members.user_id', 'users.id')
+      .where('case_members.case_id', req.params.id);
+
+    res.json({ ...item, members });
+  } catch (e) { next(e); }
+});
+
+router.put('/:id', auditLog('case:update', 'case'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = sanitizeInput(req.body);
+    const [item] = await db('cases').where({ id: req.params.id })
+      .update({ ...body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    logger.info(`Case updated: ${item.title || item.reference_number}`, { caseId: item.id });
+
+    eventBus.emit('entity:updated', {
+      entityType: 'case',
+      entityId: item.id,
+      title: item.title || item.reference_number,
+      userId: req.user!.userId,
+    });
+
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/:id', auditLog('case:delete', 'case'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const existing = await db('cases').where({ id: req.params.id }).first();
+    await db('cases').where({ id: req.params.id }).del();
+
+    if (existing) {
+      eventBus.emit('entity:deleted', {
+        entityType: 'case',
+        entityId: req.params.id,
+        title: existing.title || existing.reference_number,
+        userId: req.user!.userId,
+      });
+    }
+
+    res.json({ message: 'Deleted' });
   } catch (e) { next(e); }
 });
 
