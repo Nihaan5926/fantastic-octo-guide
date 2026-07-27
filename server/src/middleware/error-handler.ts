@@ -13,13 +13,14 @@ export class AppError extends Error {
 }
 
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
-  console.error('[Error]', err.name, err.message);
-
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({
-      error: err.message,
-      details: err.details,
-    });
+    // Downgrade benign auth errors to WARN
+    if (err.statusCode === 401 || err.statusCode === 404) {
+      console.warn('[WARN]', err.name, err.message);
+    } else {
+      console.error('[Error]', err.name, err.message);
+    }
+    res.status(err.statusCode).json({ error: err.message, details: err.details });
     return;
   }
 
