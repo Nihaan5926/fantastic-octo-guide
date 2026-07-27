@@ -11,7 +11,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { useAdminStore } from '../store';
 
 export default function AdminUsers() {
-  const { users, usersPagination, roles, isLoading, fetchUsers, createUser, updateUser, deleteUser, fetchRoles, createRole, updateRole, deleteRole } = useAdminStore();
+  const { users, usersPagination, roles, isLoading, fetchUsers, createUser, updateUser, deleteUser, permanentDeleteUser, fetchRoles, createRole, updateRole, deleteRole } = useAdminStore();
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -21,6 +21,7 @@ export default function AdminUsers() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [userForm, setUserForm] = useState({ email: '', password: '', firstName: '', lastName: '', roleName: 'VIEWER', clearance: 'UNCLASSIFIED' });
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [permDeleteTarget, setPermDeleteTarget] = useState<any>(null);
 
   // Role form
   const [roleModalOpen, setRoleModalOpen] = useState(false);
@@ -91,7 +92,8 @@ export default function AdminUsers() {
     { key: 'actions', label: '', render: (u: any) => (
       <div className="flex gap-1">
         <button onClick={(e) => { e.stopPropagation(); openEditUser(u); }} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary"><Edit size={14} /></button>
-        <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400"><UserX size={14} /></button>
+        <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400" title="Deactivate"><UserX size={14} /></button>
+        <button onClick={(e) => { e.stopPropagation(); setPermDeleteTarget(u); }} className="p-1.5 rounded-lg hover:bg-red-700/30 text-red-500" title="Delete permanently"><Trash2 size={14} /></button>
       </div>
     )},
   ];
@@ -184,6 +186,7 @@ export default function AdminUsers() {
 
       {/* Delete Confirms */}
       <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={async () => { if (deleteTarget) { await deleteUser(deleteTarget.id); setDeleteTarget(null); toast.success('User deactivated'); } }} title="Deactivate User" message={`Deactivate ${deleteTarget?.first_name} ${deleteTarget?.last_name}? They will not be able to log in.`} confirmLabel="Deactivate" />
+      <ConfirmDialog isOpen={!!permDeleteTarget} onClose={() => setPermDeleteTarget(null)} onConfirm={async () => { if (permDeleteTarget) { await permanentDeleteUser(permDeleteTarget.id); setPermDeleteTarget(null); toast.success('User permanently deleted'); } }} title="Delete User Permanently" message={`Permanently delete ${permDeleteTarget?.first_name} ${permDeleteTarget?.last_name}? This action CANNOT be undone. All associated data will also be removed.`} confirmLabel="Delete Permanently" variant="danger" />
       <ConfirmDialog isOpen={!!deleteRoleTarget} onClose={() => setDeleteRoleTarget(null)} onConfirm={async () => { if (deleteRoleTarget) { try { await deleteRole(deleteRoleTarget.id); setDeleteRoleTarget(null); toast.success('Role deleted'); } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); } } }} title="Delete Role" message={`Delete role "${deleteRoleTarget?.name}"? This cannot be undone if the role is assigned to users.`} confirmLabel="Delete" />
     </div>
   );

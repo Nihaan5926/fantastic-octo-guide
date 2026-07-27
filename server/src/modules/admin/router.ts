@@ -117,6 +117,15 @@ router.delete('/users/:id', async (req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e); }
 });
 
+router.delete('/users/:id/permanent', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+    await db('users').where({ id: req.params.id }).del();
+    res.json({ message: 'User permanently deleted' });
+  } catch (e) { next(e); }
+});
+
 // ─── ROLES ───
 
 router.get('/roles', async (req: Request, res: Response, next: NextFunction) => {

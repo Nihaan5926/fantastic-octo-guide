@@ -7,6 +7,7 @@ export const adminApi = {
   createUser: (data: any) => api.post('/admin/users', data).then((r) => r.data),
   updateUser: (id: string, data: any) => api.put(`/admin/users/${id}`, data).then((r) => r.data),
   deleteUser: (id: string) => api.delete(`/admin/users/${id}`).then((r) => r.data),
+  permanentDeleteUser: (id: string) => api.delete(`/admin/users/${id}/permanent`).then((r) => r.data),
 
   // Roles
   listRoles: () => api.get('/admin/roles').then((r) => r.data),
