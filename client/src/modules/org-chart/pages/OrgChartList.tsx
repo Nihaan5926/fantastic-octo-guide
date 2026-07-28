@@ -35,7 +35,7 @@ const unitTypeColors: Record<string, string> = {
 function TreeNode({ unit, level = 0, assignments }: { unit: OrgUnit; level?: number; assignments: PersonnelAssignment[] }) {
   const [expanded, setExpanded] = useState(level < 2);
   const hasChildren = unit.children && unit.children.length > 0;
-  const unitAssignments = assignments.filter((a) => a.unit_id === unit.id);
+  const unitAssignments = assignments.filter((a) => a.org_unit_id === unit.id);
   const personCount = unitAssignments.length;
   const typeBadge = unitTypeColors[unit.unit_type] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
@@ -107,9 +107,9 @@ const emptyUnitForm: Partial<OrgUnit> = {
 };
 
 const emptyAssignmentForm: Partial<PersonnelAssignment> = {
-  unit_id: '',
+  org_unit_id: '',
   user_id: '',
-  role: '',
+  position_title: '',
   is_primary: false,
   start_date: '',
   end_date: '',
@@ -247,9 +247,9 @@ export default function OrgChartList() {
   const handleEditAssignment = (a: PersonnelAssignment) => {
     setEditingAssignmentId(a.id);
     setAssignmentForm({
-      unit_id: a.unit_id,
+      org_unit_id: a.org_unit_id,
       user_id: a.user_id,
-      role: a.role,
+      position_title: a.position_title,
       is_primary: a.is_primary,
       start_date: a.start_date || '',
       end_date: a.end_date || '',
@@ -312,9 +312,9 @@ export default function OrgChartList() {
   ];
 
   const assignmentColumns = [
-    { key: 'unit_id', label: 'Unit ID' },
+    { key: 'org_unit_id', label: 'Unit ID' },
     { key: 'user_id', label: 'User ID' },
-    { key: 'role', label: 'Role' },
+    { key: 'position_title', label: 'Position' },
     {
       key: 'is_primary',
       label: 'Primary',
@@ -461,9 +461,9 @@ export default function OrgChartList() {
 
       <Modal isOpen={assignmentModalOpen} onClose={() => setAssignmentModalOpen(false)} title={editingAssignmentId ? 'Edit Assignment' : 'Create Assignment'} size="md">
         <form onSubmit={handleSaveAssignment} className="space-y-4">
-          <FormInput label="Unit ID" value={assignmentForm.unit_id || ''} onChange={(e) => setAssignmentField('unit_id', e.target.value)} required />
+          <FormInput label="Unit ID" value={assignmentForm.org_unit_id || ''} onChange={(e) => setAssignmentField('org_unit_id', e.target.value)} required />
           <FormInput label="User ID" value={assignmentForm.user_id || ''} onChange={(e) => setAssignmentField('user_id', e.target.value)} required />
-          <FormInput label="Role" value={assignmentForm.role || ''} onChange={(e) => setAssignmentField('role', e.target.value)} required />
+          <FormInput label="Position Title" value={assignmentForm.position_title || ''} onChange={(e) => setAssignmentField('position_title', e.target.value)} required />
           <div className="flex items-center gap-2">
             <input
               type="checkbox"

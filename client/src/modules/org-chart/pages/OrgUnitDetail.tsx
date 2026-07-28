@@ -19,7 +19,7 @@ export default function OrgUnitDetail() {
       setLoading(true);
       Promise.all([
         orgChartApi.getUnit(id).then(({ data }: any) => setUnit(data.data || data)),
-        orgChartApi.listAssignments({ unit_id: id, limit: 100 }).then(({ data }: any) => setAssignments(data.data || [])),
+        orgChartApi.listAssignments({ org_unit_id: id, limit: 100 }).then(({ data }: any) => setAssignments(data.data || [])),
       ])
         .catch(() => {})
         .finally(() => setLoading(false));
@@ -40,7 +40,7 @@ export default function OrgUnitDetail() {
 
   const assignmentColumns = [
     { key: 'user_id', label: 'User ID' },
-    { key: 'role', label: 'Role' },
+    { key: 'position_title', label: 'Position' },
     {
       key: 'is_primary',
       label: 'Primary',

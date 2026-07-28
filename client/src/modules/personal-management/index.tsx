@@ -7,7 +7,7 @@ export default {
   name: 'personal-management',
   version: '1.0.0',
   category: 'Personnel',
-  permissions: ['personnel:read', 'personnel:write'],
+  permissions: ['personnel:read', 'personnel:create', 'personnel:update', 'personnel:delete'],
   apiPrefix: '/api/personnel',
   globalSearchEnabled: true,
   routes: [
@@ -15,7 +15,7 @@ export default {
     { path: '/personnel/:id', element: <PersonnelDetail /> },
   ],
   navItems: [
-    { label: 'Personnel', path: '/personnel', icon: 'Users', category: 'Personnel', order: 1 },
+    { label: 'Personnel', path: '/personnel', icon: 'UserCheck', category: 'PERSONNEL', order: 20 },
   ],
   dashboardWidgets: [],
 };

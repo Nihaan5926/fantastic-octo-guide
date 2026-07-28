@@ -10,6 +10,7 @@ export interface OrgUnit {
   description: string | null;
   location: string | null;
   established_date: string | null;
+  metadata?: Record<string, any>;
   children?: OrgUnit[];
   created_at?: string;
   updated_at?: string;
@@ -17,14 +18,13 @@ export interface OrgUnit {
 
 export interface PersonnelAssignment {
   id: string;
-  unit_id: string;
+  org_unit_id: string;
   user_id: string;
-  role: string;
+  position_title: string;
   is_primary: boolean;
   start_date: string | null;
   end_date: string | null;
   created_at?: string;
-  updated_at?: string;
 }
 
 interface OrgChartState {

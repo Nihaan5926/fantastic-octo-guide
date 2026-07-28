@@ -7,7 +7,7 @@ export default {
   name: 'org-chart',
   version: '1.0.0',
   category: 'Personnel',
-  permissions: ['org-chart:read', 'org-chart:write'],
+  permissions: ['org-chart:read', 'org-chart:create', 'org-chart:update', 'org-chart:delete'],
   apiPrefix: '/api/org-chart',
   globalSearchEnabled: true,
   routes: [
@@ -15,7 +15,7 @@ export default {
     { path: '/org-chart/:id', element: <OrgUnitDetail /> },
   ],
   navItems: [
-    { label: 'Org Chart', path: '/org-chart', icon: 'GitBranch', category: 'Personnel', order: 2 },
+    { label: 'Org Chart', path: '/org-chart', icon: 'Building2', category: 'PERSONNEL', order: 21 },
   ],
   dashboardWidgets: [],
 };
