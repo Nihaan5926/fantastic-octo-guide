@@ -394,6 +394,24 @@ export async function bootstrapDatabase(db: knex.Knex) {
     await db.raw('ALTER TABLE declassification_requests ALTER COLUMN requested_by DROP NOT NULL').catch(() => {});
   } catch(e: any) {}
 
+  // Repair: if any uuid columns were accidentally converted to varchar, convert back
+  console.log('[Bootstrap] Repairing uuid column types...');
+  try {
+    const cols = await db('information_schema.columns')
+      .select('table_name', 'column_name')
+      .where({ table_schema: 'public', data_type: 'character varying' });
+    let repaired = 0;
+    for (const c of cols) {
+      if (c.column_name.endsWith('_id') || c.column_name === 'id') {
+        try {
+          await db.raw(`ALTER TABLE "${c.table_name}" ALTER COLUMN "${c.column_name}" TYPE uuid USING "${c.column_name}"::uuid`);
+          repaired++;
+        } catch { /* non-uuid data, leave as varchar */ }
+      }
+    }
+    console.log(`[Bootstrap] Repaired ${repaired} varchar->_id columns back to uuid`);
+  } catch(e: any) { console.warn('[Bootstrap] UUID repair failed:', e.message); }
+
   console.log('[Bootstrap] Database schema check complete.');
 }
 
