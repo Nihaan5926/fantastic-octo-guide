@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Edit, Trash2, Calendar, User, Download, ChevronDown } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { taskingAssignmentsApi } from '../api';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';

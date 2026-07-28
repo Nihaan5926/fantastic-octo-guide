@@ -10,6 +10,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
 import { ClassificationBadge } from '../../../components/common/Badges';
 import { usePersonnelStore, PersonnelRecord } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { personnelApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { Edit, Trash2, ArrowRightCircle, AlertTriangle, Flag, Download, ChevronDown } from 'lucide-react';
 import { useFintStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { fintApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import PageHeader from '../../../components/common/PageHeader';

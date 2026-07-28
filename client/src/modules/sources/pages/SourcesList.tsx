@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useSourceStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { sourcesApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import DataTable from '../../../components/common/DataTable';
@@ -56,6 +57,7 @@ const emptyForm: SourceForm = {
 
 export default function SourcesList() {
   const { items, pagination, isLoading, isSubmitting, fetchList, create, update, remove } = useSourceStore();
+  const { tableColumns } = useDynamicTable('sources');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -247,7 +249,7 @@ export default function SourcesList() {
         <FormSelect label="" options={statusOptions} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} placeholder="All Statuses" className="w-40" />
       </div>
 
-      <DataTable columns={columns} data={items} pagination={pagination} isLoading={isLoading} emptyMessage="No sources found" onPageChange={setPage} />
+      <DataTable columns={[...tableColumns, ...columns.filter(c => c.key === 'actions')]} data={items} pagination={pagination} isLoading={isLoading} emptyMessage="No sources found" onPageChange={setPage} />
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Edit Source' : 'Create Source'} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">

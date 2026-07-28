@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useThreatStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { threatsApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import DataTable from '../../../components/common/DataTable';
@@ -53,6 +54,7 @@ const emptyForm: ActorForm = {
 
 export default function ActorList() {
   const { actors, pagination, isLoading, isSubmitting, fetchActors, createActor, updateActor, removeActor } = useThreatStore();
+  const { tableColumns } = useDynamicTable('threat_actors');
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -280,7 +282,7 @@ export default function ActorList() {
         <FormSelect label="" options={statusOptions} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} placeholder="All Statuses" className="w-40" />
       </div>
 
-      <DataTable columns={columns} data={actors} pagination={pagination} isLoading={isLoading} emptyMessage="No threat actors found" onPageChange={setPage} onRowClick={(item) => navigate(`/threats/actors/${item.id}`)} />
+      <DataTable columns={[...tableColumns, ...columns.filter(c => c.key === 'actions')]} data={actors} pagination={pagination} isLoading={isLoading} emptyMessage="No threat actors found" onPageChange={setPage} onRowClick={(item) => navigate(`/threats/actors/${item.id}`)} />
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Edit Actor' : 'Create Actor'} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">

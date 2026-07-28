@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Eye, Edit, Trash2, Download, ChevronDown } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { briefingsApi } from '../api';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import PageHeader from '../../../components/common/PageHeader';
 import SearchBar from '../../../components/common/SearchBar';
 import DataTable from '../../../components/common/DataTable';

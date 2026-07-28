@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Pencil, Trash2, Plus, GraduationCap, ClipboardList, FileText, User, TrendingUp, Users, BookOpen, Download, ChevronDown, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { trainingApi } from '../api';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import PageHeader from '../../../components/common/PageHeader';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';

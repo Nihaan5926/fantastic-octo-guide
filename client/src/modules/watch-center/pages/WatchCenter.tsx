@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Pencil, Trash2, Plus, Clock, FileText, AlertCircle, AlertTriangle, RefreshCw, Download, ChevronDown } from 'lucide-react';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { watchCenterApi } from '../api';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import PageHeader from '../../../components/common/PageHeader';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';

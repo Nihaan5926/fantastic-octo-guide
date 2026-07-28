@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useReportStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { reportsApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import DataTable from '../../../components/common/DataTable';
@@ -63,6 +64,7 @@ const statusColorMap: Record<string, string> = {
 export default function ReportsList() {
   const navigate = useNavigate();
   const { items, pagination, isLoading, isSubmitting, fetchList, create, update, remove } = useReportStore();
+  const { tableColumns } = useDynamicTable('intelligence_reports');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [classificationFilter, setClassificationFilter] = useState('');
@@ -373,7 +375,7 @@ export default function ReportsList() {
       )}
 
       <DataTable
-        columns={columns}
+        columns={[...tableColumns, ...columns.filter(c => c.key === 'actions')]}
         data={items}
         pagination={pagination}
         isLoading={isLoading}

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useOSINTStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { osintApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import DataTable from '../../../components/common/DataTable';
@@ -56,6 +57,7 @@ const emptyForm: TaskForm = {
 
 export default function TaskList() {
   const { items, pagination, isLoading, isSubmitting, fetchList, create, update, remove, run } = useOSINTStore();
+  const { tableColumns } = useDynamicTable('osint_collection_tasks');
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -253,7 +255,7 @@ export default function TaskList() {
         <FormSelect label="" options={statusOptions} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} placeholder="All Statuses" className="w-40" />
       </div>
 
-      <DataTable columns={columns} data={items} pagination={pagination} isLoading={isLoading} emptyMessage="No OSINT tasks found" onPageChange={setPage} onRowClick={(item) => navigate(`/osint/tasks/${item.id}`)} />
+      <DataTable columns={[...tableColumns, ...columns.filter(c => c.key === 'actions')]} data={items} pagination={pagination} isLoading={isLoading} emptyMessage="No OSINT tasks found" onPageChange={setPage} onRowClick={(item) => navigate(`/osint/tasks/${item.id}`)} />
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Edit Task' : 'Create Task'} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">

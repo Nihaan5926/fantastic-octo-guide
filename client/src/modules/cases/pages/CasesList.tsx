@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useCaseStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { casesApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import DataTable from '../../../components/common/DataTable';
@@ -57,6 +58,7 @@ const emptyForm: CaseForm = {
 export default function CasesList() {
   const navigate = useNavigate();
   const { items, pagination, isLoading, isSubmitting, fetchList, create, update, remove } = useCaseStore();
+  const { tableColumns } = useDynamicTable('cases');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
@@ -330,7 +332,7 @@ export default function CasesList() {
       )}
 
       <DataTable
-        columns={columns}
+        columns={[...tableColumns, ...columns.filter(c => c.key === 'actions')]}
         data={items}
         pagination={pagination}
         isLoading={isLoading}

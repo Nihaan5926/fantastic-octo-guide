@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { Edit, Trash2, Download, ChevronDown } from 'lucide-react';
 import { useCIStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { ciApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import PageHeader from '../../../components/common/PageHeader';

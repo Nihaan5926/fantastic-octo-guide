@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { Edit, Trash2, Eye, Download, ChevronDown, Map } from 'lucide-react';
 import { geointApi } from '../api';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import { useGeointStore } from '../store';
 import PageHeader from '../../../components/common/PageHeader';

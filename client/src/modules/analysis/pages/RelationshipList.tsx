@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useAnalysisStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { analysisApi } from '../api';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
@@ -495,6 +496,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, onFilter }: {
 
 export default function RelationshipList() {
   const { items, pagination, graph, graphStats, isLoading, isSubmitting, fetchList, create, remove, fetchGraph, fetchGraphStats } = useAnalysisStore();
+  const { tableColumns } = useDynamicTable('entity_relationships');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -665,7 +667,7 @@ export default function RelationshipList() {
             <FormSelect label="" options={relationshipTypeOptions} value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }} placeholder="All Types" className="w-44" />
           </div>
           <DataTable
-            columns={columns}
+            columns={[...tableColumns, ...columns.filter(c => c.key === 'actions')]}
             data={filteredItems}
             pagination={pagination}
             isLoading={isLoading}

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useEvidenceStore } from '../store';
+import { useDynamicTable } from '../../../hooks/useDynamicTable';
 import { evidenceApi } from '../api';
 import { exportToCSV, exportToJSON } from '../../../utils/export';
 import Modal from '../../../components/common/Modal';
@@ -94,6 +95,7 @@ function getPreviewable(mimeType: string | null): boolean {
 
 export default function EvidenceList() {
   const { items, pagination, isLoading, isSubmitting, fetchList, createWithFile, remove } = useEvidenceStore();
+  const { tableColumns } = useDynamicTable('evidence');
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
