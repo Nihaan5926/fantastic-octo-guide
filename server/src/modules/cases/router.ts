@@ -62,7 +62,7 @@ router.post('/', auditLog('case:create', 'case'), async (req: Request, res: Resp
     const body = sanitizeInput(req.body);
     const ref = `CASE-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(4, '0')}`;
     const [item] = await db('cases').insert({
-      id: uuid(), reference_number: ref, lead_analyst_id: req.user!.userId, ...body,
+      ...body, id: uuid(), reference_number: ref, lead_analyst_id: req.user!.userId,
     }).returning('*');
     logger.info(`Case created: ${item.title || ref}`, { caseId: item.id });
 

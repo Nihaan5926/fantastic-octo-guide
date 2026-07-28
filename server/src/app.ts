@@ -43,6 +43,12 @@ export async function createApp() {
     await bootstrapDatabase(db);
   } catch(e: any) { console.warn('[App] Bootstrap warning:', e.message); }
 
+  // Auto-run all migrations on startup
+  try {
+    const { runMigrations } = require('./db/migrate');
+    await runMigrations('up');
+  } catch(e: any) { console.warn('[App] Migration warning:', e.message); }
+
   const moduleDir = path.resolve(__dirname, 'modules');
   await moduleRegistry.loadAll(moduleDir, { db, io, eventBus });
 

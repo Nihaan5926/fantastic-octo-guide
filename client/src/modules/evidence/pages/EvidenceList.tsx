@@ -93,7 +93,7 @@ function getPreviewable(mimeType: string | null): boolean {
 }
 
 export default function EvidenceList() {
-  const { items, pagination, isLoading, isSubmitting, fetchList, create, createWithFile, remove } = useEvidenceStore();
+  const { items, pagination, isLoading, isSubmitting, fetchList, createWithFile, remove } = useEvidenceStore();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -152,7 +152,14 @@ export default function EvidenceList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await create(form);
+      const fd = new FormData();
+      fd.append('type', form.type);
+      fd.append('title', form.title || '');
+      fd.append('description', form.description);
+      fd.append('classification', form.classification);
+      if (form.case_id) fd.append('caseId', form.case_id);
+      if (form.report_id) fd.append('reportId', form.report_id);
+      await createWithFile(fd);
       toast.success('Evidence created');
       setFormOpen(false);
       fetchList({ page, search, type: typeFilter, classification: classificationFilter });

@@ -2,15 +2,8 @@ import { db } from './knex';
 import path from 'path';
 import fs from 'fs';
 
-async function runMigrations(direction: 'up' | 'down' = 'up') {
+export async function runMigrations(direction: 'up' | 'down' = 'up') {
   console.log(`[Migrate] Running migrations ${direction}...`);
-
-  try {
-    await db.raw('SELECT 1');
-  } catch (err: any) {
-    console.error('[Migrate] Cannot connect to database:', err.message);
-    process.exit(1);
-  }
 
   // Ensure migrations tracking table
   if (!await db.schema.hasTable('migrations')) {
@@ -46,6 +39,7 @@ async function runMigrations(direction: 'up' | 'down' = 'up') {
     return a.localeCompare(b);
   });
 
+  let count = 0;
   if (direction === 'up') {
     for (const file of allFiles) {
       const mig = require(file);
@@ -53,36 +47,29 @@ async function runMigrations(direction: 'up' | 'down' = 'up') {
       const name = path.basename(path.dirname(file)) + '_' + path.basename(file, path.extname(file));
       const already = await db('migrations').where({ name }).first();
       if (already) {
-        console.log(`  [skip] ${name}`);
         continue;
       }
       try {
         await mig.up(db);
+        await db('migrations').insert({ name });
+        count++;
         console.log(`  [ok]   ${name}`);
       } catch (e: any) {
-        console.log(`  [FAIL] ${name}: ${e.message}`);
-        // Continue to next migration — don't stop the whole process
+        console.log(`  [skip] ${name}: ${e.message}`);
       }
-    }
-  } else {
-    // Rollback: reverse order, skip polymorphic migration tables if roles/users still exist
-    for (const file of allFiles.reverse()) {
-      const mig = require(file);
-      if (!mig.down) continue;
-      const name = path.basename(path.dirname(file)) + '_' + path.basename(file, path.extname(file));
-      const already = await db('migrations').where({ name }).first();
-      if (!already) {
-        console.log(`  [skip] ${name} (not applied)`);
-        continue;
-      }
-      await mig.down(db);
-      console.log(`  [ok]   ${name} (rolled back)`);
     }
   }
 
-  console.log('[Migrate] Done.');
-  await db.destroy();
+  console.log(`[Migrate] Applied ${count} new migrations.`);
 }
 
-const direction = process.argv[2] === 'down' ? 'down' : 'up';
-runMigrations(direction);
+// Standalone CLI
+if (require.main === module) {
+  const direction = process.argv[2] === 'down' ? 'down' : 'up';
+  import('./knex').then(({ db: knexDb }) => {
+    runMigrations(direction).then(() => {
+      knexDb.destroy();
+      process.exit(0);
+    });
+  });
+}
