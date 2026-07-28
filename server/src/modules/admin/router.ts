@@ -418,8 +418,9 @@ router.get('/data/:table', async (req: Request, res: Response, next: NextFunctio
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = (page - 1) * limit;
     const items = await db(table).select('*').limit(limit).offset(offset);
-    const total = await db(table).count('id').first().then((r: any) => parseInt(r.count, 10));
-    res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+    const [{ count: totalRaw }] = await db(table).count('* as count');
+    const total = parseInt(String(totalRaw), 10) || 0;
+    res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 } });
   } catch (e) { next(e); }
 });
 
@@ -458,7 +459,8 @@ router.put('/data/:table/:id', async (req: Request, res: Response, next: NextFun
   try {
     const { table, id } = req.params;
     if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
-    const [item] = await db(table).where({ id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    const { id: _id, created_at, updated_at, ...body } = req.body;
+    const [item] = await db(table).where({ id }).update({ ...body, updated_at: db.fn.now() }).returning('*');
     if (!item) { res.status(404).json({ error: 'Not found' }); return; }
     res.json(item);
   } catch (e) { next(e); }
@@ -475,14 +477,16 @@ router.delete('/data/:table/:id', async (req: Request, res: Response, next: Next
 
 // ── Schema Management (ADMIN only) ────────────────────────────────────────────
 
+router.use('/schema', adminOnly);
+
 router.post('/schema/:table/column', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { table } = req.params;
     if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
-    const { column_name, data_type, is_nullable } = req.body;
+    const { column_name, data_type, is_nullable, default_value } = req.body;
     if (!column_name || !data_type) { res.status(400).json({ error: 'column_name and data_type required' }); return; }
     const nullable = is_nullable === 'YES' || is_nullable === true ? '' : ' NOT NULL';
-    const def = req.body.default_value ? ` DEFAULT ${req.body.default_value}` : '';
+    const def = default_value ? ` DEFAULT ${default_value}` : '';
     await db.raw(`ALTER TABLE "${table}" ADD COLUMN "${column_name}" ${data_type}${nullable}${def}`);
     res.status(201).json({ message: `Column ${column_name} added to ${table}` });
   } catch (e) { next(e); }
@@ -494,14 +498,14 @@ router.put('/schema/:table/column/:column', async (req: Request, res: Response, 
     if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
     const { data_type, is_nullable, default_value } = req.body;
     if (data_type) {
-      await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE ${data_type} USING "${column}"::${data_type.split('(')[0]}`).catch(() => {});
+      await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE ${data_type}`).catch((e) => { throw e; });
     }
     if (is_nullable === 'YES' || is_nullable === true) {
       await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" DROP NOT NULL`).catch(() => {});
     } else if (is_nullable === 'NO' || is_nullable === false) {
       await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" SET NOT NULL`).catch(() => {});
     }
-    if (default_value !== undefined) {
+    if (default_value) {
       await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" SET DEFAULT ${default_value}`).catch(() => {});
     }
     res.json({ message: `Column ${column} in ${table} updated` });

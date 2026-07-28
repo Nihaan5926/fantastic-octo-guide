@@ -185,16 +185,17 @@ export default function DataManager() {
     e.preventDefault();
     setSaving(true);
     try {
+      const payload = {
+        column_name: colForm.column_name,
+        data_type: colForm.data_type,
+        is_nullable: colForm.is_nullable,
+        default_value: colForm.default_value || undefined,
+      };
       if (colEditing) {
-        await api.put(`/admin/schema/${selectedTable}/column/${colEditing.column_name}`, colForm);
+        await api.put(`/admin/schema/${selectedTable}/column/${colEditing.column_name}`, payload);
         toast.success('Column updated');
       } else {
-        await api.post(`/admin/schema/${selectedTable}/column`, {
-          column_name: colForm.column_name,
-          data_type: colForm.data_type,
-          is_nullable: colForm.is_nullable,
-          default_value: colForm.default_value || undefined,
-        });
+        await api.post(`/admin/schema/${selectedTable}/column`, payload);
         toast.success('Column added');
       }
       setColDialogOpen(false);
