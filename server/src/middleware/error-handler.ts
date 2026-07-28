@@ -40,8 +40,10 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     return;
   }
 
+  console.error('[500]', err.message, err.stack?.split('\n')[1]?.trim() || '');
   res.status(500).json({
     error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+    stack: process.env.NODE_ENV === 'production' ? undefined : err.stack,
   });
 }
 
