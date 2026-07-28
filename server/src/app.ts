@@ -36,18 +36,17 @@ export async function createApp() {
 
   await testConnection();
 
-  // Ensure ALL tables and columns exist before loading modules
-  // Safe — uses IF NOT EXISTS, errors are logged not thrown
-  try {
-    const { bootstrapDatabase } = require('./db/bootstrap');
-    await bootstrapDatabase(db);
-  } catch(e: any) { console.warn('[App] Bootstrap warning:', e.message); }
-
-  // Auto-run all migrations on startup
+  // Run migrations first to create tables with proper schemas
   try {
     const { runMigrations } = require('./db/migrate');
     await runMigrations('up');
   } catch(e: any) { console.warn('[App] Migration warning:', e.message); }
+
+  // Bootstrap fills in gaps — uses IF NOT EXISTS, safe to run after migrations
+  try {
+    const { bootstrapDatabase } = require('./db/bootstrap');
+    await bootstrapDatabase(db);
+  } catch(e: any) { console.warn('[App] Bootstrap warning:', e.message); }
 
   const moduleDir = path.resolve(__dirname, 'modules');
   await moduleRegistry.loadAll(moduleDir, { db, io, eventBus });

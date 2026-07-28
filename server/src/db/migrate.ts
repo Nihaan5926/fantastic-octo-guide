@@ -5,6 +5,16 @@ import fs from 'fs';
 export async function runMigrations(direction: 'up' | 'down' = 'up') {
   console.log(`[Migrate] Running migrations ${direction}...`);
 
+  // Monkey-patch createTable to ignore "already exists" errors
+  // This allows bootstrap and migrations to coexist without conflicts
+  const origCreateTable = db.schema.createTable.bind(db.schema);
+  (db.schema as any).createTable = function (tableName: string, callback: any) {
+    return origCreateTable(tableName, callback).catch((err: any) => {
+      if (err.message && err.message.includes('already exists')) return;
+      throw err;
+    });
+  };
+
   // Ensure migrations tracking table
   if (!await db.schema.hasTable('migrations')) {
     await db.schema.createTable('migrations', (t) => {
