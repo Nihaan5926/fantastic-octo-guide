@@ -6,7 +6,7 @@ import {
   UserCheck, GraduationCap, Clock, Target, Crosshair,
   ListChecks, Map, Radio, Fingerprint, DollarSign,
   UserX, MessageSquare, Presentation, Building2,
-  Scale, Archive, Wallet, ChevronDown, Activity, Upload, Terminal, GitBranch, Grid3X3
+  Scale, Archive, Wallet, ChevronDown, Activity, Upload, Terminal, GitBranch, Grid3X3, Database
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -42,6 +42,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Scale: <Scale size={18} />,
   Archive: <Archive size={18} />,
   Wallet: <Wallet size={18} />,
+  Database: <Database size={18} />,
 };
 
 const staticNavItems: { category: string; items: { label: string; path: string; icon: string; category: string; order: number }[] }[] = [
@@ -91,6 +92,7 @@ const staticNavItems: { category: string; items: { label: string; path: string; 
   ]},
   { category: 'ADMIN', items: [
     { label: 'Users', path: '/admin/users', icon: 'Users', category: 'ADMIN', order: 90 },
+    { label: 'Data Manager', path: '/admin/data', icon: 'Database', category: 'ADMIN', order: 89 },
     { label: 'Audit Logs', path: '/admin/audit-logs', icon: 'ListChecks', category: 'ADMIN', order: 91 },
     { label: 'System Health', path: '/admin/health', icon: 'Activity', category: 'ADMIN', order: 92 },
     { label: 'Bulk Import', path: '/admin/bulk-import', icon: 'Upload', category: 'ADMIN', order: 93 },
