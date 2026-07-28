@@ -94,6 +94,40 @@ export async function bootstrapDatabase(db: knex.Knex) {
     },
     // Training
     {
+      name: 'training_courses',
+      sql: `CREATE TABLE IF NOT EXISTS training_courses (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        title varchar(300) NOT NULL, description text, course_type varchar(50),
+        duration_hours numeric(6,1), instructor varchar(200),
+        is_required boolean DEFAULT false, certification_issued varchar(200),
+        metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
+      )`
+    },
+    {
+      name: 'training_enrollments',
+      sql: `CREATE TABLE IF NOT EXISTS training_enrollments (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        course_id uuid NOT NULL, user_id uuid NOT NULL,
+        status varchar(50) DEFAULT 'ENROLLED', enrolled_at timestamptz DEFAULT now(),
+        completed_at timestamptz, score numeric(5,1), notes text,
+        metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now(),
+        UNIQUE(course_id, user_id)
+      )`
+    },
+    {
+      name: 'after_action_reports',
+      sql: `CREATE TABLE IF NOT EXISTS after_action_reports (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        title varchar(500) NOT NULL, exercise_name varchar(300), date date,
+        summary text, findings jsonb DEFAULT '[]', recommendations jsonb DEFAULT '[]',
+        participants jsonb DEFAULT '[]', author_id uuid NOT NULL,
+        metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now()
+      )`
+    },
+    {
       name: 'course_prerequisites',
       sql: `CREATE TABLE IF NOT EXISTS course_prerequisites (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -125,12 +159,68 @@ export async function bootstrapDatabase(db: knex.Knex) {
     },
     // Personnel
     {
+      name: 'personnel_records',
+      sql: `CREATE TABLE IF NOT EXISTS personnel_records (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid, date_of_birth date, nationality varchar(100),
+        position_title varchar(200), clearance_level varchar(50), clearance_expiry date,
+        special_accesses jsonb DEFAULT '[]', languages jsonb DEFAULT '[]',
+        skills jsonb DEFAULT '[]', certifications jsonb DEFAULT '[]',
+        notes text, metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
+      )`
+    },
+    {
+      name: 'org_units',
+      sql: `CREATE TABLE IF NOT EXISTS org_units (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name varchar(200) NOT NULL, parent_id uuid, unit_type varchar(50),
+        commander_id uuid, description text, location varchar(200),
+        established_date date, metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
+      )`
+    },
+    {
       name: 'personnel_assignments',
       sql: `CREATE TABLE IF NOT EXISTS personnel_assignments (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id uuid NOT NULL, org_unit_id uuid NOT NULL,
         position_title varchar(200), is_primary boolean DEFAULT false,
         start_date date, end_date date, created_at timestamptz DEFAULT now()
+      )`
+    },
+    // Watch Center
+    {
+      name: 'shift_schedules',
+      sql: `CREATE TABLE IF NOT EXISTS shift_schedules (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid, shift_name varchar(100), start_time time, end_time time,
+        days jsonb DEFAULT '[]', is_active boolean DEFAULT true,
+        created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
+      )`
+    },
+    {
+      name: 'watch_logs',
+      sql: `CREATE TABLE IF NOT EXISTS watch_logs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        shift_id uuid, author_id uuid NOT NULL,
+        log_type varchar(50) DEFAULT 'GENERAL', title varchar(300) NOT NULL,
+        content text, severity varchar(20) DEFAULT 'INFO',
+        status varchar(50) DEFAULT 'OPEN', acknowledged_by uuid,
+        acknowledged_at timestamptz, metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now()
+      )`
+    },
+    {
+      name: 'sitreps',
+      sql: `CREATE TABLE IF NOT EXISTS sitreps (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        reference_number varchar(50) UNIQUE NOT NULL, title varchar(500) NOT NULL,
+        period_start timestamptz, period_end timestamptz,
+        author_id uuid NOT NULL, classification varchar(50) DEFAULT 'UNCLASSIFIED',
+        content jsonb DEFAULT '{}', status varchar(50) DEFAULT 'DRAFT',
+        metadata jsonb DEFAULT '{}',
+        created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
       )`
     },
   ];
