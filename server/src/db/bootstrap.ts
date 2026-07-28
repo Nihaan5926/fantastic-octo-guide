@@ -412,6 +412,20 @@ export async function bootstrapDatabase(db: knex.Knex) {
     console.log(`[Bootstrap] Repaired ${repaired} varchar->_id columns back to uuid`);
   } catch(e: any) { console.warn('[Bootstrap] UUID repair failed:', e.message); }
 
+  // Drop all foreign key constraints for fully independent data entry
+  console.log('[Bootstrap] Dropping foreign key constraints...');
+  try {
+    const fks = await db('information_schema.table_constraints')
+      .select('table_name', 'constraint_name')
+      .where({ constraint_type: 'FOREIGN KEY', table_schema: 'public' });
+    let dropped = 0;
+    for (const fk of fks) {
+      await db.raw(`ALTER TABLE "${fk.table_name}" DROP CONSTRAINT IF EXISTS "${fk.constraint_name}"`).catch(() => {});
+      dropped++;
+    }
+    console.log(`[Bootstrap] Dropped ${dropped} foreign key constraints`);
+  } catch(e: any) { console.warn('[Bootstrap] FK drop failed:', e.message); }
+
   console.log('[Bootstrap] Database schema check complete.');
 }
 

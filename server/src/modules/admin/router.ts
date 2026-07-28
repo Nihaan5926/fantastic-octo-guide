@@ -371,7 +371,15 @@ router.delete('/logs', async (_req: Request, res: Response, next: NextFunction) 
   } catch (e) { next(e); }
 });
 
-// ── Data Management (Full CRUD on any table) ─────────────────────────────────
+// ── Data Management (Full CRUD on any table — ADMIN only) ───────────────────
+
+function adminOnly(req: Request, res: Response, next: NextFunction) {
+  if (!req.user || req.user.role !== 'ADMIN') {
+    res.status(403).json({ error: 'Admin access required' });
+    return;
+  }
+  next();
+}
 
 const ALLOWED_TABLES = [
   'sources', 'cases', 'evidence', 'intelligence_reports', 'target_packages', 'target_nominations',
@@ -395,6 +403,8 @@ const ALLOWED_TABLES = [
   'entity_relationships', 'entity_tags', 'entity_comments', 'entity_attachments',
   'users', 'roles',
 ];
+
+router.use('/data', adminOnly);
 
 router.get('/data/tables', async (_req: Request, res: Response) => {
   res.json({ data: ALLOWED_TABLES });
