@@ -442,7 +442,7 @@ export default function OrgChartList() {
       <Modal isOpen={unitModalOpen} onClose={() => setUnitModalOpen(false)} title={editingUnitId ? 'Edit Unit' : 'Create Unit'} size="lg">
         <form onSubmit={handleSaveUnit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="Name" value={unitForm.name || ''} onChange={(e) => setUnitField('name', e.target.value)} required />
+            <FormInput label="Name" value={unitForm.name || ''} onChange={(e) => setUnitField('name', e.target.value)} />
             <FormSelect label="Unit Type" value={unitForm.unit_type || 'SECTION'} options={UNIT_TYPE_OPTIONS} onChange={(e) => setUnitField('unit_type', e.target.value)} />
             <FormInput label="Parent Unit ID" value={unitForm.parent_id || ''} onChange={(e) => setUnitField('parent_id', e.target.value || null)} />
             <FormInput label="Commander ID" value={unitForm.commander_id || ''} onChange={(e) => setUnitField('commander_id', e.target.value)} />
@@ -461,9 +461,9 @@ export default function OrgChartList() {
 
       <Modal isOpen={assignmentModalOpen} onClose={() => setAssignmentModalOpen(false)} title={editingAssignmentId ? 'Edit Assignment' : 'Create Assignment'} size="md">
         <form onSubmit={handleSaveAssignment} className="space-y-4">
-          <FormInput label="Unit ID" value={assignmentForm.org_unit_id || ''} onChange={(e) => setAssignmentField('org_unit_id', e.target.value)} required />
-          <FormInput label="User ID" value={assignmentForm.user_id || ''} onChange={(e) => setAssignmentField('user_id', e.target.value)} required />
-          <FormInput label="Position Title" value={assignmentForm.position_title || ''} onChange={(e) => setAssignmentField('position_title', e.target.value)} required />
+          <FormInput label="Unit ID" value={assignmentForm.org_unit_id || ''} onChange={(e) => setAssignmentField('org_unit_id', e.target.value)} />
+          <FormInput label="User ID" value={assignmentForm.user_id || ''} onChange={(e) => setAssignmentField('user_id', e.target.value)} />
+          <FormInput label="Position Title" value={assignmentForm.position_title || ''} onChange={(e) => setAssignmentField('position_title', e.target.value)} />
           <div className="flex items-center gap-2">
             <input
               type="checkbox"

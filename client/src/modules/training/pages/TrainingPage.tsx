@@ -541,8 +541,7 @@ export default function TrainingPage() {
                     </div>
                     {c.is_required && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/25 shrink-0">
-                        <BookOpen size={10} /> REQUIRED
-                      </span>
+                        <BookOpen size={10} />  </span>
                     )}
                   </div>
                 ))}
@@ -578,7 +577,7 @@ export default function TrainingPage() {
           {tab === 'courses' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Title" value={courseForm.title || ''} onChange={(e) => setCourseForm((f: any) => ({ ...f, title: e.target.value }))} required />
+                <FormInput label="Title" value={courseForm.title || ''} onChange={(e) => setCourseForm((f: any) => ({ ...f, title: e.target.value }))} />
                 <FormSelect label="Type" value={courseForm.course_type || 'CLASSROOM'} options={COURSE_TYPE_OPTIONS} onChange={(e) => setCourseForm((f: any) => ({ ...f, course_type: e.target.value }))} />
                 <FormInput label="Instructor" value={courseForm.instructor || ''} onChange={(e) => setCourseForm((f: any) => ({ ...f, instructor: e.target.value }))} />
                 <FormInput label="Duration (hours)" type="number" value={courseForm.duration_hours?.toString() || '0'} onChange={(e) => setCourseForm((f: any) => ({ ...f, duration_hours: parseInt(e.target.value) || 0 }))} />
@@ -595,8 +594,8 @@ export default function TrainingPage() {
           {(tab === 'enrollments' || tab === 'my-training') && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Course ID" value={enrollmentForm.course_id || ''} onChange={(e) => setEnrollmentForm((f: any) => ({ ...f, course_id: e.target.value }))} required />
-                <FormInput label="User ID" value={enrollmentForm.user_id || ''} onChange={(e) => setEnrollmentForm((f: any) => ({ ...f, user_id: e.target.value }))} required />
+                <FormInput label="Course ID" value={enrollmentForm.course_id || ''} onChange={(e) => setEnrollmentForm((f: any) => ({ ...f, course_id: e.target.value }))} />
+                <FormInput label="User ID" value={enrollmentForm.user_id || ''} onChange={(e) => setEnrollmentForm((f: any) => ({ ...f, user_id: e.target.value }))} />
                 <FormSelect label="Status" value={enrollmentForm.status || 'ENROLLED'} options={ENROLLMENT_STATUS_OPTIONS} onChange={(e) => setEnrollmentForm((f: any) => ({ ...f, status: e.target.value }))} />
                 <FormInput label="Score" type="number" value={enrollmentForm.score?.toString() || ''} onChange={(e) => setEnrollmentForm((f: any) => ({ ...f, score: e.target.value ? parseFloat(e.target.value) : null }))} />
                 <FormInput label="Enrolled Date" type="date" value={enrollmentForm.enrolled_date || ''} onChange={(e) => setEnrollmentForm((f: any) => ({ ...f, enrolled_date: e.target.value }))} />
@@ -608,7 +607,7 @@ export default function TrainingPage() {
           {tab === 'aars' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Course ID" value={aarForm.course_id || ''} onChange={(e) => setAarForm((f: any) => ({ ...f, course_id: e.target.value }))} required />
+                <FormInput label="Course ID" value={aarForm.course_id || ''} onChange={(e) => setAarForm((f: any) => ({ ...f, course_id: e.target.value }))} />
                 <FormInput label="Report Date" type="date" value={aarForm.report_date || ''} onChange={(e) => setAarForm((f: any) => ({ ...f, report_date: e.target.value }))} />
                 <FormInput label="Created By" value={aarForm.created_by || ''} onChange={(e) => setAarForm((f: any) => ({ ...f, created_by: e.target.value }))} />
               </div>

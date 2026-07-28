@@ -599,7 +599,7 @@ export default function WatchCenter() {
           {tab === 'shifts' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Shift Name" value={shiftForm.shift_name || ''} onChange={(e) => setShiftForm((f: any) => ({ ...f, shift_name: e.target.value }))} required />
+                <FormInput label="Shift Name" value={shiftForm.shift_name || ''} onChange={(e) => setShiftForm((f: any) => ({ ...f, shift_name: e.target.value }))} />
                 <FormInput label="Supervisor ID" value={shiftForm.supervisor_id || ''} onChange={(e) => setShiftForm((f: any) => ({ ...f, supervisor_id: e.target.value }))} />
                 <FormInput label="Start Time" type="datetime-local" value={shiftForm.start_time || ''} onChange={(e) => setShiftForm((f: any) => ({ ...f, start_time: e.target.value }))} />
                 <FormInput label="End Time" type="datetime-local" value={shiftForm.end_time || ''} onChange={(e) => setShiftForm((f: any) => ({ ...f, end_time: e.target.value }))} />
@@ -621,7 +621,7 @@ export default function WatchCenter() {
                 <FormInput label="Logged By" value={logForm.logged_by || ''} onChange={(e) => setLogForm((f: any) => ({ ...f, logged_by: e.target.value }))} />
                 <FormInput label="Logged At" type="datetime-local" value={logForm.logged_at || ''} onChange={(e) => setLogForm((f: any) => ({ ...f, logged_at: e.target.value }))} />
               </div>
-              <FormTextarea label="Log Entry" value={logForm.log_entry || ''} onChange={(e) => setLogForm((f: any) => ({ ...f, log_entry: e.target.value }))} required />
+              <FormTextarea label="Log Entry" value={logForm.log_entry || ''} onChange={(e) => setLogForm((f: any) => ({ ...f, log_entry: e.target.value }))} />
               <FormTextarea label="Actions Taken" value={logForm.actions_taken || ''} onChange={(e) => setLogForm((f: any) => ({ ...f, actions_taken: e.target.value }))} />
             </>
           )}

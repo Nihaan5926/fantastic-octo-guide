@@ -292,7 +292,7 @@ export default function LiaisonList() {
           {tab === 'partners' && (
             <>
               <div className="grid grid-cols-2 gap-4">
-                <FormInput label="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <FormInput label="Name"  value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                 <FormInput label="Organization" value={form.organization} onChange={(e) => setForm({ ...form, organization: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -305,8 +305,8 @@ export default function LiaisonList() {
           {tab === 'mous' && (
             <>
               <div className="grid grid-cols-2 gap-4">
-                <FormInput label="Reference Number" required value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
-                <FormInput label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <FormInput label="Reference Number"  value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
+                <FormInput label="Title"  value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <FormInput label="Start Date" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
@@ -324,7 +324,7 @@ export default function LiaisonList() {
                 <FormInput label="Partner ID" value={form.partner_id} onChange={(e) => setForm({ ...form, partner_id: e.target.value })} />
                 <FormInput label="Contact Date" type="date" value={form.contact_date} onChange={(e) => setForm({ ...form, contact_date: e.target.value })} />
               </div>
-              <FormTextarea label="Summary" required value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
+              <FormTextarea label="Summary"  value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="flex items-center gap-2 cursor-pointer">

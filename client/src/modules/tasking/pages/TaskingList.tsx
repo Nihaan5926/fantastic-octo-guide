@@ -253,17 +253,17 @@ export default function TaskingList() {
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Assignment' : 'New Assignment'} size="lg">
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <FormInput label="Reference Number" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} required />
-            <FormSelect label="Status" options={statusOptions} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} required />
+            <FormInput label="Reference Number" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
+            <FormSelect label="Status" options={statusOptions} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} />
           </div>
-          <FormInput label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+          <FormInput label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <div className="grid grid-cols-2 gap-4">
-            <FormSelect label="Task Type" options={taskTypeOptions} value={form.task_type} onChange={(e) => setForm({ ...form, task_type: e.target.value })} required />
-            <FormSelect label="Priority" options={priorityOptions} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} required />
+            <FormSelect label="Task Type" options={taskTypeOptions} value={form.task_type} onChange={(e) => setForm({ ...form, task_type: e.target.value })} />
+            <FormSelect label="Priority" options={priorityOptions} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
           </div>
-          <FormTextarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
+          <FormTextarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <div className="grid grid-cols-3 gap-4">
-            <FormInput label="Assigned To" value={form.assigned_to} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })} required />
+            <FormInput label="Assigned To" value={form.assigned_to} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })} />
             <FormInput label="Assigned By" value={form.assigned_by} onChange={(e) => setForm({ ...form, assigned_by: e.target.value })} />
             <FormInput label="Due Date" type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
           </div>

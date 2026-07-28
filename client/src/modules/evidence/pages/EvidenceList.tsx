@@ -637,10 +637,10 @@ export default function EvidenceList() {
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title="Create Evidence" size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormSelect label="Type" options={typeOptions} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required />
-            <FormSelect label="Classification" options={classificationOptions} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} required />
+            <FormSelect label="Type" options={typeOptions} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} />
+            <FormSelect label="Classification" options={classificationOptions} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} />
           </div>
-          <FormInput label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+          <FormInput label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <FormTextarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormInput label="Case ID" value={form.case_id} onChange={(e) => setForm({ ...form, case_id: e.target.value })} placeholder="Optional" />

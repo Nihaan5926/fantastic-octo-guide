@@ -511,7 +511,7 @@ export default function FintList() {
         {activeTab === 'transactions' ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormInput label="Transaction Ref" required value={txForm.transaction_ref} onChange={(e) => setTxForm({ ...txForm, transaction_ref: e.target.value })} />
+              <FormInput label="Transaction Ref"  value={txForm.transaction_ref} onChange={(e) => setTxForm({ ...txForm, transaction_ref: e.target.value })} />
               <FormInput label="Transaction Date" type="date" value={txForm.transaction_date} onChange={(e) => setTxForm({ ...txForm, transaction_date: e.target.value })} />
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -527,7 +527,7 @@ export default function FintList() {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormInput label="Name" required value={entForm.name} onChange={(e) => setEntForm({ ...entForm, name: e.target.value })} />
+              <FormInput label="Name"  value={entForm.name} onChange={(e) => setEntForm({ ...entForm, name: e.target.value })} />
               <FormInput label="Entity Type" value={entForm.entity_type} onChange={(e) => setEntForm({ ...entForm, entity_type: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">

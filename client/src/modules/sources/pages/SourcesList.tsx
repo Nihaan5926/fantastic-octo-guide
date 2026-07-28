@@ -252,13 +252,13 @@ export default function SourcesList() {
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Edit Source' : 'Create Source'} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormInput label="Code Name" value={form.code_name} onChange={(e) => setForm({ ...form, code_name: e.target.value })} required />
-            <FormInput label="Handler ID" value={form.handler_id} onChange={(e) => setForm({ ...form, handler_id: e.target.value })} required />
+            <FormInput label="Code Name" value={form.code_name} onChange={(e) => setForm({ ...form, code_name: e.target.value })} />
+            <FormInput label="Handler ID" value={form.handler_id} onChange={(e) => setForm({ ...form, handler_id: e.target.value })} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <FormSelect label="Type" options={typeOptions} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required />
-            <FormSelect label="Reliability" options={reliabilityOptions} value={form.reliability_rating} onChange={(e) => setForm({ ...form, reliability_rating: e.target.value })} required />
-            <FormSelect label="Status" options={statusOptions} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} required />
+            <FormSelect label="Type" options={typeOptions} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} />
+            <FormSelect label="Reliability" options={reliabilityOptions} value={form.reliability_rating} onChange={(e) => setForm({ ...form, reliability_rating: e.target.value })} />
+            <FormSelect label="Status" options={statusOptions} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} />
           </div>
           <FormTextarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
           <FormTextarea label="Contact Info (JSON)" value={form.contact_info} onChange={(e) => setForm({ ...form, contact_info: e.target.value })} rows={2} />

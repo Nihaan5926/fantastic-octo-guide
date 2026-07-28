@@ -674,7 +674,7 @@ export default function CasesDetail() {
 
       <Modal isOpen={taskModalOpen} onClose={() => setTaskModalOpen(false)} title="Create Task for Case" size="md">
         <div className="space-y-4">
-          <FormInput label="Title" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} required />
+          <FormInput label="Title" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} />
           <FormTextarea label="Description" value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} rows={3} />
           <div className="grid grid-cols-2 gap-4">
             <FormInput label="Assigned To" value={taskForm.assigned_to} onChange={(e) => setTaskForm({ ...taskForm, assigned_to: e.target.value })} placeholder="User ID" />
@@ -700,8 +700,7 @@ export default function CasesDetail() {
               value={selectedEvidenceId}
               onChange={(e) => setSelectedEvidenceId(e.target.value)}
               placeholder="Choose evidence..."
-              required
-            />
+              />
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <button onClick={() => setLinkEvidenceOpen(false)} className="btn-secondary" disabled={linking}>Cancel</button>
               <button onClick={handleLinkEvidence} className="btn-primary" disabled={linking || !selectedEvidenceId}>
@@ -779,7 +778,7 @@ export default function CasesDetail() {
 
       <Modal isOpen={childModalOpen} onClose={() => setChildModalOpen(false)} title="Create Sub-Case" size="md">
         <div className="space-y-4">
-          <FormInput label="Title" value={childForm.title} onChange={(e) => setChildForm({ ...childForm, title: e.target.value })} required />
+          <FormInput label="Title" value={childForm.title} onChange={(e) => setChildForm({ ...childForm, title: e.target.value })} />
           <FormTextarea label="Description" value={childForm.description} onChange={(e) => setChildForm({ ...childForm, description: e.target.value })} rows={3} />
           <div className="grid grid-cols-2 gap-4">
             <FormSelect label="Priority" options={priorityOptions} value={childForm.priority} onChange={(e) => setChildForm({ ...childForm, priority: e.target.value })} />

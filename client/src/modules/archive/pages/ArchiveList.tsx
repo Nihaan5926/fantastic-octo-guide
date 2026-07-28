@@ -279,7 +279,7 @@ export default function ArchiveList() {
             <>
               <div className="grid grid-cols-2 gap-4">
                 <FormInput label="Reference Number" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
-                <FormInput label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <FormInput label="Title"  value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <FormInput label="Entity Type" value={form.entity_type} onChange={(e) => setForm({ ...form, entity_type: e.target.value })} />
@@ -298,7 +298,7 @@ export default function ArchiveList() {
             <>
               <div className="grid grid-cols-2 gap-4">
                 <FormInput label="Reference Number" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
-                <FormInput label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <FormInput label="Title"  value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <FormInput label="Entity Type" value={form.entity_type} onChange={(e) => setForm({ ...form, entity_type: e.target.value })} />

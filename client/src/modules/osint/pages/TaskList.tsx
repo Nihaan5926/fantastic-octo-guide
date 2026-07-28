@@ -257,12 +257,12 @@ export default function TaskList() {
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Edit Task' : 'Create Task'} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormInput label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          <FormTextarea label="Query" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} rows={2} required />
+          <FormInput label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          <FormTextarea label="Query" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} rows={2} />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <FormSelect label="Source Type" options={sourceTypeOptions} value={form.source_types} onChange={(e) => setForm({ ...form, source_types: e.target.value })} required />
-            <FormSelect label="Schedule" options={scheduleOptions} value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} required />
-            <FormSelect label="Status" options={statusOptions} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} required />
+            <FormSelect label="Source Type" options={sourceTypeOptions} value={form.source_types} onChange={(e) => setForm({ ...form, source_types: e.target.value })} />
+            <FormSelect label="Schedule" options={scheduleOptions} value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} />
+            <FormSelect label="Status" options={statusOptions} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <button type="button" onClick={() => setFormOpen(false)} className="btn-secondary">Cancel</button>

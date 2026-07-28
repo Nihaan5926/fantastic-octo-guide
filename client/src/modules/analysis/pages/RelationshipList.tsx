@@ -773,14 +773,14 @@ export default function RelationshipList() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <h4 className="text-sm font-medium text-text-secondary">Source</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormSelect label="Source Type" options={sourceTypeOptions} value={form.source_type} onChange={(e) => setForm({ ...form, source_type: e.target.value })} required />
-            <FormInput label="Source ID" value={form.source_id} onChange={(e) => setForm({ ...form, source_id: e.target.value })} required />
+            <FormSelect label="Source Type" options={sourceTypeOptions} value={form.source_type} onChange={(e) => setForm({ ...form, source_type: e.target.value })} />
+            <FormInput label="Source ID" value={form.source_id} onChange={(e) => setForm({ ...form, source_id: e.target.value })} />
           </div>
-          <FormSelect label="Relationship Type" options={relationshipTypeOptions} value={form.relationship_type} onChange={(e) => setForm({ ...form, relationship_type: e.target.value })} required />
+          <FormSelect label="Relationship Type" options={relationshipTypeOptions} value={form.relationship_type} onChange={(e) => setForm({ ...form, relationship_type: e.target.value })} />
           <h4 className="text-sm font-medium text-text-secondary">Target</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormSelect label="Target Type" options={sourceTypeOptions} value={form.target_type} onChange={(e) => setForm({ ...form, target_type: e.target.value })} required />
-            <FormInput label="Target ID" value={form.target_id} onChange={(e) => setForm({ ...form, target_id: e.target.value })} required />
+            <FormSelect label="Target Type" options={sourceTypeOptions} value={form.target_type} onChange={(e) => setForm({ ...form, target_type: e.target.value })} />
+            <FormInput label="Target ID" value={form.target_id} onChange={(e) => setForm({ ...form, target_id: e.target.value })} />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <button type="button" onClick={() => setFormOpen(false)} className="btn-secondary">Cancel</button>

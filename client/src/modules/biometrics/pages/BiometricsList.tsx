@@ -348,7 +348,7 @@ export default function BiometricsList() {
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalTitle} size="lg">
         {activeTab === 'records' ? (
           <div className="space-y-4">
-            <FormInput label="Subject Name" required value={recForm.subject_name} onChange={(e) => setRecForm({ ...recForm, subject_name: e.target.value })} />
+            <FormInput label="Subject Name"  value={recForm.subject_name} onChange={(e) => setRecForm({ ...recForm, subject_name: e.target.value })} />
             <div className="grid grid-cols-3 gap-4">
               <FormSelect label="Biometric Type" options={BIOMETRIC_TYPES} value={recForm.biometric_type} onChange={(e) => setRecForm({ ...recForm, biometric_type: e.target.value })} />
               <FormInput label="Confidence Score" type="number" step="0.01" min="0" max="1" value={recForm.confidence_score} onChange={(e) => setRecForm({ ...recForm, confidence_score: e.target.value })} />
@@ -358,14 +358,14 @@ export default function BiometricsList() {
           </div>
         ) : activeTab === 'watchlists' ? (
           <div className="space-y-4">
-            <FormInput label="List Name" required value={wlForm.list_name} onChange={(e) => setWlForm({ ...wlForm, list_name: e.target.value })} />
+            <FormInput label="List Name"  value={wlForm.list_name} onChange={(e) => setWlForm({ ...wlForm, list_name: e.target.value })} />
             <FormSelect label="Status" options={[{ value: 'ACTIVE', label: 'ACTIVE' }, { value: 'INACTIVE', label: 'INACTIVE' }, { value: 'ARCHIVED', label: 'ARCHIVED' }]} value={wlForm.status} onChange={(e) => setWlForm({ ...wlForm, status: e.target.value })} />
             <FormTextarea label="Description" value={wlForm.description} onChange={(e) => setWlForm({ ...wlForm, description: e.target.value })} />
           </div>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormInput label="Subject Name" required value={encForm.subject_name} onChange={(e) => setEncForm({ ...encForm, subject_name: e.target.value })} />
+              <FormInput label="Subject Name"  value={encForm.subject_name} onChange={(e) => setEncForm({ ...encForm, subject_name: e.target.value })} />
               <FormInput label="Encounter Type" value={encForm.encounter_type} onChange={(e) => setEncForm({ ...encForm, encounter_type: e.target.value })} />
             </div>
             <div className="grid grid-cols-3 gap-4">

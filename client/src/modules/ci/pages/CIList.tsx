@@ -369,7 +369,7 @@ export default function CIList() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormInput label="Reference Number" value={invForm.reference_number} onChange={(e) => setInvForm({ ...invForm, reference_number: e.target.value })} />
-              <FormInput label="Title" required value={invForm.title} onChange={(e) => setInvForm({ ...invForm, title: e.target.value })} />
+              <FormInput label="Title"  value={invForm.title} onChange={(e) => setInvForm({ ...invForm, title: e.target.value })} />
             </div>
             <div className="grid grid-cols-3 gap-4">
               <FormSelect label="Status" options={CASE_STATUSES} value={invForm.case_status} onChange={(e) => setInvForm({ ...invForm, case_status: e.target.value })} />
@@ -385,7 +385,7 @@ export default function CIList() {
         ) : activeTab === 'foreign_agents' ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormInput label="Name" required value={faForm.name} onChange={(e) => setFaForm({ ...faForm, name: e.target.value })} />
+              <FormInput label="Name"  value={faForm.name} onChange={(e) => setFaForm({ ...faForm, name: e.target.value })} />
               <FormInput label="Nationality" value={faForm.nationality} onChange={(e) => setFaForm({ ...faForm, nationality: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -401,7 +401,7 @@ export default function CIList() {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormInput label="Subject Name" required value={itForm.subject_name} onChange={(e) => setItForm({ ...itForm, subject_name: e.target.value })} />
+              <FormInput label="Subject Name"  value={itForm.subject_name} onChange={(e) => setItForm({ ...itForm, subject_name: e.target.value })} />
               <FormInput label="Department" value={itForm.department} onChange={(e) => setItForm({ ...itForm, department: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">

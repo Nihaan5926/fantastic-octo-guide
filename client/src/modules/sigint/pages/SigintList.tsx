@@ -304,7 +304,7 @@ export default function SigintList() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormInput label="Reference Number" value={interceptForm.reference_number} onChange={(e) => setInterceptForm({ ...interceptForm, reference_number: e.target.value })} />
-              <FormInput label="Title" required value={interceptForm.title} onChange={(e) => setInterceptForm({ ...interceptForm, title: e.target.value })} />
+              <FormInput label="Title"  value={interceptForm.title} onChange={(e) => setInterceptForm({ ...interceptForm, title: e.target.value })} />
             </div>
             <div className="grid grid-cols-3 gap-4">
               <FormInput label="Signal Type" value={interceptForm.signal_type} onChange={(e) => setInterceptForm({ ...interceptForm, signal_type: e.target.value })} />
@@ -319,7 +319,7 @@ export default function SigintList() {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormInput label="Name" required value={emitterForm.name} onChange={(e) => setEmitterForm({ ...emitterForm, name: e.target.value })} />
+              <FormInput label="Name"  value={emitterForm.name} onChange={(e) => setEmitterForm({ ...emitterForm, name: e.target.value })} />
               <FormInput label="Emitter Type" value={emitterForm.emitter_type} onChange={(e) => setEmitterForm({ ...emitterForm, emitter_type: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
