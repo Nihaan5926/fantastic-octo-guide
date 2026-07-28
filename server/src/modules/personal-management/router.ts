@@ -6,6 +6,7 @@ import { v4 as uuid } from 'uuid';
 import multer from 'multer';
 import path from 'path';
 import { config } from '../../config';
+import { convertEmptyToNull } from '../../utils/validators';
 
 const storage = multer.diskStorage({
   destination: config.upload.dir,
@@ -17,6 +18,13 @@ const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }
 
 const router = Router();
 router.use(authenticate);
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {

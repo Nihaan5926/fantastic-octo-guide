@@ -3,9 +3,17 @@ import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
+import { convertEmptyToNull } from '../../utils/validators';
 
 const router = Router();
 router.use(authenticate);
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 
 // ── Org Units ────────────────────────────────────────────────────────────────
 
@@ -140,8 +148,8 @@ router.get('/assignments', async (req: Request, res: Response, next: NextFunctio
     if (!await db.schema.hasTable('personnel_assignments')) {
       await db.schema.createTable('personnel_assignments', (t) => {
         t.uuid('id').primary().defaultTo(db.raw('gen_random_uuid()'));
-        t.uuid('user_id').notNullable();
-        t.uuid('org_unit_id').notNullable();
+        t.uuid('user_id').nullable();
+        t.uuid('org_unit_id').nullable();
         t.string('position_title', 200).nullable();
         t.boolean('is_primary').defaultTo(false);
         t.date('start_date').nullable();

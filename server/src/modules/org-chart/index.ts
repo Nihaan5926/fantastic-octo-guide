@@ -21,8 +21,8 @@ async function ensureTables(ctx: ModuleContext) {
     if (!await ctx.db.schema.hasTable('personnel_assignments')) {
       await ctx.db.schema.createTable('personnel_assignments', (t: any) => {
         t.uuid('id').primary().defaultTo(ctx.db.raw('gen_random_uuid()'));
-        t.uuid('user_id').notNullable();
-        t.uuid('org_unit_id').notNullable();
+        t.uuid('user_id').nullable();
+        t.uuid('org_unit_id').nullable();
         t.string('position_title', 200).nullable();
         t.boolean('is_primary').defaultTo(false);
         t.date('start_date').nullable();

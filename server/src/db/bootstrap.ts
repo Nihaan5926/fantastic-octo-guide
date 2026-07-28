@@ -108,7 +108,7 @@ export async function bootstrapDatabase(db: knex.Knex) {
       name: 'training_enrollments',
       sql: `CREATE TABLE IF NOT EXISTS training_enrollments (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        course_id uuid NOT NULL, user_id uuid NOT NULL,
+        course_id uuid, user_id uuid,
         status varchar(50) DEFAULT 'ENROLLED', enrolled_at timestamptz DEFAULT now(),
         completed_at timestamptz, score numeric(5,1), notes text,
         metadata jsonb DEFAULT '{}',
@@ -122,7 +122,7 @@ export async function bootstrapDatabase(db: knex.Knex) {
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         title varchar(500) NOT NULL, exercise_name varchar(300), date date,
         summary text, findings jsonb DEFAULT '[]', recommendations jsonb DEFAULT '[]',
-        participants jsonb DEFAULT '[]', author_id uuid NOT NULL,
+        participants jsonb DEFAULT '[]', author_id uuid,
         metadata jsonb DEFAULT '{}',
         created_at timestamptz DEFAULT now()
       )`
@@ -184,7 +184,7 @@ export async function bootstrapDatabase(db: knex.Knex) {
       name: 'personnel_assignments',
       sql: `CREATE TABLE IF NOT EXISTS personnel_assignments (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid NOT NULL, org_unit_id uuid NOT NULL,
+        user_id uuid, org_unit_id uuid,
         position_title varchar(200), is_primary boolean DEFAULT false,
         start_date date, end_date date, created_at timestamptz DEFAULT now()
       )`
@@ -203,7 +203,7 @@ export async function bootstrapDatabase(db: knex.Knex) {
       name: 'watch_logs',
       sql: `CREATE TABLE IF NOT EXISTS watch_logs (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        shift_id uuid, author_id uuid NOT NULL,
+        shift_id uuid, author_id uuid,
         log_type varchar(50) DEFAULT 'GENERAL', title varchar(300) NOT NULL,
         content text, severity varchar(20) DEFAULT 'INFO',
         status varchar(50) DEFAULT 'OPEN', acknowledged_by uuid,
@@ -215,9 +215,9 @@ export async function bootstrapDatabase(db: knex.Knex) {
       name: 'sitreps',
       sql: `CREATE TABLE IF NOT EXISTS sitreps (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        reference_number varchar(50) UNIQUE NOT NULL, title varchar(500) NOT NULL,
+        reference_number varchar(50) UNIQUE, title varchar(500),
         period_start timestamptz, period_end timestamptz,
-        author_id uuid NOT NULL, classification varchar(50) DEFAULT 'UNCLASSIFIED',
+        author_id uuid, classification varchar(50) DEFAULT 'UNCLASSIFIED',
         content jsonb DEFAULT '{}', status varchar(50) DEFAULT 'DRAFT',
         metadata jsonb DEFAULT '{}',
         created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()

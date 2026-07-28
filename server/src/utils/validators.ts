@@ -36,3 +36,17 @@ export function validateRequired(fields: string[], body: any): string | null {
   }
   return null;
 }
+
+export function convertEmptyToNull(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') return obj.trim() === '' ? null : obj;
+  if (Array.isArray(obj)) return obj.map(convertEmptyToNull);
+  if (typeof obj === 'object') {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = convertEmptyToNull(obj[key]);
+    }
+    return result;
+  }
+  return obj;
+}
