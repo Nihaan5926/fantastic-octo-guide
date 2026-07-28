@@ -5,7 +5,7 @@ import { auditLog } from '../../middleware/audit';
 import { authorize } from '../../middleware/rbac';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
-import { sanitizeInput } from '../../utils/validators';
+import { sanitizeInput, convertEmptyToNull } from '../../utils/validators';
 import { logger } from '../../utils/logger';
 import multer from 'multer';
 import path from 'path';
@@ -21,6 +21,14 @@ const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }
 
 const router = Router();
 router.use(authenticate);
+
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 
 // ── Collection Routes ──
 

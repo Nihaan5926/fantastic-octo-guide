@@ -9,9 +9,17 @@ import path from 'path';
 import { config } from '../../config';
 import { db } from '../../db/knex';
 import { v4 as uuid } from 'uuid';
+import { convertEmptyToNull } from '../../utils/validators';
 import fs from 'fs';
 
 const router = Router();
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 
 router.get('/ping', (_req, res) => { res.json({ pong: true }); });
 

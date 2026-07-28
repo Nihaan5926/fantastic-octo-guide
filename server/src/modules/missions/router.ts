@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/auth';
 import { auditLog } from '../../middleware/audit';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
+import { convertEmptyToNull } from '../../utils/validators';
 import multer from 'multer';
 import path from 'path';
 import { config } from '../../config';
@@ -18,6 +19,14 @@ const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }
 
 const router = Router();
 router.use(authenticate);
+
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 
 // ── Mission Plans Collection ──
 

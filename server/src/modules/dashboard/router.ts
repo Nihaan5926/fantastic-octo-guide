@@ -1,9 +1,18 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
+import { convertEmptyToNull } from '../../utils/validators';
 
 const router = Router();
 router.use(authenticate);
+
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 
 router.get('/kpis', async (_req: Request, res: Response, next: NextFunction) => {
   try {

@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
+import { convertEmptyToNull } from '../../utils/validators';
 import { db } from '../../db/knex';
 import { config } from '../../config';
 import { authenticate } from '../../middleware/auth';
@@ -11,6 +12,14 @@ import apiKeyRouter from './api-key-routes';
 
 const router = Router();
 router.use(authenticate);
+
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 router.use(announcementRouter);
 router.use(apiKeyRouter);
 

@@ -3,9 +3,18 @@ import { db } from '../../db/knex';
 import { authenticate } from '../../middleware/auth';
 import { eventBus } from '../../core/event-bus';
 import { v4 as uuid } from 'uuid';
+import { convertEmptyToNull } from '../../utils/validators';
 
 const router = Router();
 router.use(authenticate);
+
+
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = convertEmptyToNull(req.body);
+  }
+  next();
+});
 
 // GEOINT Features
 router.get('/features', async (req: Request, res: Response, next: NextFunction) => {
