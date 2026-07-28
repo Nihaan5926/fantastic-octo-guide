@@ -15,9 +15,11 @@ import fs from 'fs';
 const router = Router();
 
 router.use((req: Request, _res: Response, next: NextFunction) => {
-  if (req.body && typeof req.body === 'object') {
-    req.body = convertEmptyToNull(req.body);
-  }
+  try {
+    if (req.body && typeof req.body === 'object') {
+      req.body = convertEmptyToNull(req.body);
+    }
+  } catch (e: any) { console.warn('[Auth] body sanitize failed:', e.message); }
   next();
 });
 
