@@ -177,8 +177,7 @@ router.get('/enrollments', async (req: Request, res: Response, next: NextFunctio
 
 router.post('/enrollments', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('training_enrollments').insert({
-      id: uuid(), user_id: req.user!.userId, ...req.body,
+    const [item] = await db('training_enrollments').insert({...req.body, id: uuid(), user_id: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'training_enrollment',
@@ -261,8 +260,7 @@ router.get('/aar/:id', async (req: Request, res: Response, next: NextFunction) =
 
 router.post('/aar', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('after_action_reports').insert({
-      id: uuid(), author_id: req.user!.userId, ...req.body,
+    const [item] = await db('after_action_reports').insert({...req.body, id: uuid(), author_id: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'after_action_report',
@@ -305,3 +303,4 @@ router.delete('/aar/:id', async (req: Request, res: Response, next: NextFunction
 });
 
 export default router;
+

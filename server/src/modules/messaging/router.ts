@@ -62,8 +62,7 @@ router.get('/channels/:id', async (req: Request, res: Response, next: NextFuncti
 
 router.post('/channels', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('message_channels').insert({
-      id: uuid(), created_by: req.user!.userId, ...req.body,
+    const [item] = await db('message_channels').insert({...req.body, id: uuid(), created_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'message_channel',
@@ -185,7 +184,7 @@ router.get('/messages/:id', async (req: Request, res: Response, next: NextFuncti
 
 router.post('/messages', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const payload: any = { id: uuid(), sender_id: req.user!.userId, ...req.body };
+    const payload: any = {...req.body, id: uuid(), sender_id: req.user!.userId };
     const [item] = await db('secure_messages').insert(payload).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'secure_message',
@@ -247,3 +246,4 @@ router.delete('/messages/:id', async (req: Request, res: Response, next: NextFun
 });
 
 export default router;
+

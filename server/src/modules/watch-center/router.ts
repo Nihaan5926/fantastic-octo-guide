@@ -113,7 +113,7 @@ router.get('/shifts/:id', async (req: Request, res: Response, next: NextFunction
 
 router.post('/shifts', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('shift_schedules').insert({ id: uuid(), user_id: req.user!.userId, ...req.body }).returning('*');
+    const [item] = await db('shift_schedules').insert({...req.body, id: uuid(), user_id: req.user!.userId }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'shift_schedule',
       entityId: item.id,
@@ -209,8 +209,7 @@ router.get('/logs/:id', async (req: Request, res: Response, next: NextFunction) 
 
 router.post('/logs', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('watch_logs').insert({
-      id: uuid(), author_id: req.user!.userId, ...req.body,
+    const [item] = await db('watch_logs').insert({...req.body, id: uuid(), author_id: req.user!.userId,
     }).returning('*');
 
     eventBus.emit('entity:created', {
@@ -323,7 +322,7 @@ router.post('/sitreps', async (req: Request, res: Response, next: NextFunction) 
   try {
     const ref = `SITREP-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(5, '0')}`;
     const [item] = await db('sitreps').insert({
-      id: uuid(), reference_number: ref, author_id: req.user!.userId, ...req.body,
+      ...req.body, id: uuid(), reference_number: ref, author_id: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'sitrep',
@@ -366,3 +365,4 @@ router.delete('/sitreps/:id', async (req: Request, res: Response, next: NextFunc
 });
 
 export default router;
+

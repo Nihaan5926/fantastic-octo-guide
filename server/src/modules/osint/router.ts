@@ -142,8 +142,7 @@ router.get('/tasks', async (req: Request, res: Response, next: NextFunction) => 
 
 router.post('/tasks', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('osint_collection_tasks').insert({
-      id: uuid(), created_by: req.user!.userId, ...req.body,
+    const [item] = await db('osint_collection_tasks').insert({...req.body, id: uuid(), created_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'osint_task',
@@ -309,3 +308,4 @@ router.delete('/tasks/:id', async (req: Request, res: Response, next: NextFuncti
 });
 
 export default router;
+

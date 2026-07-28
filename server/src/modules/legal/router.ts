@@ -156,8 +156,7 @@ router.get('/compliance/:id', async (req: Request, res: Response, next: NextFunc
 
 router.post('/compliance', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('compliance_checks').insert({
-      id: uuid(), checked_by: req.user!.userId, ...req.body,
+    const [item] = await db('compliance_checks').insert({...req.body, id: uuid(), checked_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'compliance_check',
@@ -238,10 +237,7 @@ router.get('/holds/:id', async (req: Request, res: Response, next: NextFunction)
 
 router.post('/holds', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('legal_holds').insert({
-      id: uuid(),
-      created_by: req.user!.userId,
-      ...req.body,
+    const [item] = await db('legal_holds').insert({...req.body, id: uuid(), created_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'legal_hold',
@@ -291,3 +287,4 @@ router.delete('/holds/:id', async (req: Request, res: Response, next: NextFuncti
 });
 
 export default router;
+

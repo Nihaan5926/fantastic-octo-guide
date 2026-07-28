@@ -100,8 +100,8 @@ router.post('/:id/children', async (req: Request, res: Response, next: NextFunct
     if (!parent) { res.status(404).json({ error: 'Parent case not found' }); return; }
     const ref = `CASE-${new Date().getFullYear()}-${String(Date.now() % 100000).padStart(4, '0')}`;
     const [item] = await db('cases').insert({
-      id: uuid(), reference_number: ref, parent_case_id: req.params.id,
-      lead_analyst_id: req.user!.userId, ...body,
+      ...body, id: uuid(), reference_number: ref, parent_case_id: req.params.id,
+      lead_analyst_id: req.user!.userId,
     }).returning('*');
     logger.info(`Sub-case created: ${item.title || ref} under ${parent.title || parent.reference_number}`, { caseId: item.id, parentId: req.params.id });
     eventBus.emit('entity:created', {

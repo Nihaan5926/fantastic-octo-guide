@@ -60,10 +60,7 @@ router.get('/records/:id', async (req: Request, res: Response, next: NextFunctio
 
 router.post('/records', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('biometric_records').insert({
-      id: uuid(),
-      collector_id: req.user!.userId,
-      ...req.body,
+    const [item] = await db('biometric_records').insert({...req.body, id: uuid(), collector_id: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'biometric_record',
@@ -147,10 +144,7 @@ router.get('/watchlists/:id', async (req: Request, res: Response, next: NextFunc
 
 router.post('/watchlists', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('biometric_watchlists').insert({
-      id: uuid(),
-      owner_id: req.user!.userId,
-      ...req.body,
+    const [item] = await db('biometric_watchlists').insert({...req.body, id: uuid(), owner_id: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'biometric_watchlist',
@@ -236,10 +230,7 @@ router.get('/encounters/:id', async (req: Request, res: Response, next: NextFunc
 
 router.post('/encounters', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('biometric_encounters').insert({
-      id: uuid(),
-      encountered_by: req.user!.userId,
-      ...req.body,
+    const [item] = await db('biometric_encounters').insert({...req.body, id: uuid(), encountered_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'biometric_encounter',
@@ -280,3 +271,4 @@ router.delete('/encounters/:id', async (req: Request, res: Response, next: NextF
 });
 
 export default router;
+

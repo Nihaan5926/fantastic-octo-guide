@@ -121,7 +121,7 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
 router.post('/:id/distributions', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [dist] = await db('briefing_distributions').insert({
-      id: uuid(), briefing_id: req.params.id, ...req.body,
+      ...req.body, id: uuid(), briefing_id: req.params.id,
     }).returning('*');
     res.status(201).json(dist);
   } catch (e) { next(e); }

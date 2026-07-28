@@ -203,8 +203,7 @@ router.get('/contact-logs', async (req: Request, res: Response, next: NextFuncti
 
 router.post('/contact-logs', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('partner_contact_logs').insert({
-      id: uuid(), contactor_id: req.user!.userId, ...req.body,
+    const [item] = await db('partner_contact_logs').insert({...req.body, id: uuid(), contactor_id: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'partner_contact_log',
@@ -241,3 +240,4 @@ router.delete('/contact-logs/:id', async (req: Request, res: Response, next: Nex
 });
 
 export default router;
+

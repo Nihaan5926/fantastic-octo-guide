@@ -59,10 +59,7 @@ router.get('/features/:id', async (req: Request, res: Response, next: NextFuncti
 
 router.post('/features', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('geoint_features').insert({
-      id: uuid(),
-      analyst_id: req.user!.userId,
-      ...req.body,
+    const [item] = await db('geoint_features').insert({...req.body, id: uuid(), analyst_id: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'geoint_feature',
@@ -174,3 +171,4 @@ router.delete('/annotations/:id', async (req: Request, res: Response, next: Next
 });
 
 export default router;
+

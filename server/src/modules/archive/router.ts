@@ -171,8 +171,7 @@ router.get('/declassification/:id', async (req: Request, res: Response, next: Ne
 
 router.post('/declassification', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('declassification_requests').insert({
-      id: uuid(), requested_by: req.user!.userId, ...req.body,
+    const [item] = await db('declassification_requests').insert({...req.body, id: uuid(), requested_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'declassification_request',
@@ -213,3 +212,4 @@ router.delete('/declassification/:id', async (req: Request, res: Response, next:
 });
 
 export default router;
+

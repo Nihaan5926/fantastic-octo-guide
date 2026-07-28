@@ -33,8 +33,7 @@ router.get('/relationships', async (req: Request, res: Response, next: NextFunct
 
 router.post('/relationships', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('entity_relationships').insert({
-      id: uuid(), created_by: req.user!.userId, ...req.body,
+    const [item] = await db('entity_relationships').insert({...req.body, id: uuid(), created_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'relationship',
@@ -198,3 +197,4 @@ router.get('/timeline', async (req: Request, res: Response, next: NextFunction) 
 });
 
 export default router;
+

@@ -227,10 +227,7 @@ router.get('/insider-threats/:id', async (req: Request, res: Response, next: Nex
 
 router.post('/insider-threats', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [item] = await db('ci_insider_threats').insert({
-      id: uuid(),
-      reported_by: req.user!.userId,
-      ...req.body,
+    const [item] = await db('ci_insider_threats').insert({...req.body, id: uuid(), reported_by: req.user!.userId,
     }).returning('*');
     eventBus.emit('entity:created', {
       entityType: 'ci_insider_threat',
@@ -271,3 +268,4 @@ router.delete('/insider-threats/:id', async (req: Request, res: Response, next: 
 });
 
 export default router;
+
