@@ -394,6 +394,19 @@ export async function bootstrapDatabase(db: knex.Knex) {
     await db.raw('ALTER TABLE declassification_requests ALTER COLUMN requested_by DROP NOT NULL').catch(() => {});
   } catch(e: any) {}
 
+  // Convert all uuid FK columns to varchar(255) so any text input is accepted
+  console.log('[Bootstrap] Relaxing uuid columns to varchar...');
+  try {
+    const tables = await db('information_schema.columns')
+      .select('table_name', 'column_name')
+      .where({ table_schema: 'public', data_type: 'uuid' })
+      .whereNot({ column_name: 'id' });
+    for (const row of tables) {
+      await db.raw(`ALTER TABLE "${row.table_name}" ALTER COLUMN "${row.column_name}" TYPE varchar(255)`).catch(() => {});
+    }
+    console.log(`[Bootstrap] Relaxed ${tables.length} uuid columns to varchar`);
+  } catch(e: any) { console.warn('[Bootstrap] UUID relax failed:', e.message); }
+
   console.log('[Bootstrap] Database schema check complete.');
 }
 
