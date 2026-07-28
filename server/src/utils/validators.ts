@@ -1,5 +1,8 @@
+import { createHash } from 'crypto';
+
 const HTML_TAG_RE = /<[^>]*>/g;
 const SCRIPT_RE = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function stripHtml(input: string): string {
   return input.replace(SCRIPT_RE, '').replace(HTML_TAG_RE, '').trim();
@@ -37,6 +40,11 @@ export function validateRequired(fields: string[], body: any): string | null {
   return null;
 }
 
+function textToUuid(text: string): string {
+  const hash = createHash('sha256').update(text).digest('hex');
+  return `${hash.slice(0,8)}-${hash.slice(8,12)}-4${hash.slice(13,16)}-${hash.slice(16,20)}-${hash.slice(20,32)}`;
+}
+
 export function convertEmptyToNull(obj: any): any {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === 'string') return obj.trim() === '' ? null : obj;
@@ -44,7 +52,11 @@ export function convertEmptyToNull(obj: any): any {
   if (typeof obj === 'object') {
     const result: Record<string, any> = {};
     for (const key of Object.keys(obj)) {
-      result[key] = convertEmptyToNull(obj[key]);
+      let val = convertEmptyToNull(obj[key]);
+      if (typeof val === 'string' && val.length > 0 && (key.endsWith('_id') || key === 'id') && !UUID_RE.test(val)) {
+        val = textToUuid(val);
+      }
+      result[key] = val;
     }
     return result;
   }
