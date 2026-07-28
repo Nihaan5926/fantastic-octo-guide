@@ -473,4 +473,48 @@ router.delete('/data/:table/:id', async (req: Request, res: Response, next: Next
   } catch (e) { next(e); }
 });
 
+// ── Schema Management (ADMIN only) ────────────────────────────────────────────
+
+router.post('/schema/:table/column', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    const { column_name, data_type, is_nullable } = req.body;
+    if (!column_name || !data_type) { res.status(400).json({ error: 'column_name and data_type required' }); return; }
+    const nullable = is_nullable === 'YES' || is_nullable === true ? '' : ' NOT NULL';
+    const def = req.body.default_value ? ` DEFAULT ${req.body.default_value}` : '';
+    await db.raw(`ALTER TABLE "${table}" ADD COLUMN "${column_name}" ${data_type}${nullable}${def}`);
+    res.status(201).json({ message: `Column ${column_name} added to ${table}` });
+  } catch (e) { next(e); }
+});
+
+router.put('/schema/:table/column/:column', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table, column } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    const { data_type, is_nullable, default_value } = req.body;
+    if (data_type) {
+      await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE ${data_type} USING "${column}"::${data_type.split('(')[0]}`).catch(() => {});
+    }
+    if (is_nullable === 'YES' || is_nullable === true) {
+      await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" DROP NOT NULL`).catch(() => {});
+    } else if (is_nullable === 'NO' || is_nullable === false) {
+      await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" SET NOT NULL`).catch(() => {});
+    }
+    if (default_value !== undefined) {
+      await db.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" SET DEFAULT ${default_value}`).catch(() => {});
+    }
+    res.json({ message: `Column ${column} in ${table} updated` });
+  } catch (e) { next(e); }
+});
+
+router.delete('/schema/:table/column/:column', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table, column } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    await db.raw(`ALTER TABLE "${table}" DROP COLUMN IF EXISTS "${column}"`);
+    res.json({ message: `Column ${column} dropped from ${table}` });
+  } catch (e) { next(e); }
+});
+
 export default router;

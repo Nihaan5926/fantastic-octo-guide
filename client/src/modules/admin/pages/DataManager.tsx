@@ -1,12 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { Pencil, Trash2, Plus, RefreshCw, Info } from 'lucide-react';
+import { Pencil, Trash2, Plus, RefreshCw, Info, Columns, X } from 'lucide-react';
 import api from '../../../api/client';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
 import PageHeader from '../../../components/common/PageHeader';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { FormInput, FormTextarea } from '../../../components/common/FormComponents';
+
+const TYPE_OPTIONS = [
+  'uuid', 'varchar(255)', 'varchar(500)', 'text',
+  'integer', 'bigint', 'numeric(15,2)', 'real', 'boolean',
+  'date', 'time', 'timestamptz', 'timestamp',
+  'jsonb', 'json',
+];
 
 const TYPE_COLORS: Record<string, string> = {
   uuid: 'bg-purple-500/20 text-purple-400',
@@ -16,7 +22,7 @@ const TYPE_COLORS: Record<string, string> = {
   integer: 'bg-amber-500/20 text-amber-400',
   bigint: 'bg-amber-500/20 text-amber-400',
   numeric: 'bg-amber-500/20 text-amber-400',
-  decimal: 'bg-amber-500/20 text-amber-400',
+  real: 'bg-amber-500/20 text-amber-400',
   boolean: 'bg-cyan-500/20 text-cyan-400',
   jsonb: 'bg-pink-500/20 text-pink-400',
   json: 'bg-pink-500/20 text-pink-400',
@@ -24,14 +30,12 @@ const TYPE_COLORS: Record<string, string> = {
   time: 'bg-teal-500/20 text-teal-400',
   'timestamp with time zone': 'bg-teal-500/20 text-teal-400',
   'timestamp without time zone': 'bg-teal-500/20 text-teal-400',
-  real: 'bg-amber-500/20 text-amber-400',
-  'ARRAY': 'bg-orange-500/20 text-orange-400',
 };
 
 function typeBadge(t: string) {
   const short = t.replace('character varying', 'varchar').replace('timestamp with time zone', 'timestamptz').replace('timestamp without time zone', 'timestamp');
   const color = TYPE_COLORS[t] || 'bg-gray-500/20 text-gray-400';
-  return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${color}`}>{short}</span>;
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${color}`}>{short}</span>;
 }
 
 export default function DataManager() {
@@ -49,6 +53,13 @@ export default function DataManager() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
+  // Schema management state
+  const [schemaOpen, setSchemaOpen] = useState(false);
+  const [colDialogOpen, setColDialogOpen] = useState(false);
+  const [colEditing, setColEditing] = useState<any>(null);
+  const [colForm, setColForm] = useState({ column_name: '', data_type: 'varchar(255)', is_nullable: 'YES', default_value: '' });
+  const [deleteCol, setDeleteCol] = useState<{ table: string; column: string } | null>(null);
+
   useEffect(() => {
     api.get('/admin/data/tables').then(({ data }: any) => setTables(data.data || []));
   }, []);
@@ -60,12 +71,16 @@ export default function DataManager() {
       const { data: res } = await api.get(`/admin/data/${selectedTable}`, { params: { page, limit: 50 } });
       setItems(res.data || []);
       setPagination(res.pagination || { page: 1, limit: 50, total: 0, totalPages: 0 });
-
-      const { data: schema } = await api.get(`/admin/data/${selectedTable}/schema`);
-      setAllColumns(schema.data || []);
+      await loadSchema();
     } catch { toast.error('Failed to load'); }
     finally { setLoading(false); }
   }, [selectedTable, page]);
+
+  const loadSchema = async () => {
+    if (!selectedTable) return;
+    const { data: schema } = await api.get(`/admin/data/${selectedTable}/schema`);
+    setAllColumns(schema.data || []);
+  };
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -73,7 +88,7 @@ export default function DataManager() {
 
   const tableColumns = allColumns.map(c => ({
     key: c.column_name,
-    label: `${c.column_name} (${c.data_type.replace('character varying', 'varchar').replace('timestamp with time zone', 'timestamptz')})`,
+    label: `${c.column_name} (${(c.data_type || '').replace('character varying', 'varchar').replace('timestamp with time zone', 'timestamptz')})`,
     render: (item: any) => {
       const val = item[c.column_name];
       if (val === null || val === undefined) return <span className="text-text-muted italic text-xs">—</span>;
@@ -147,9 +162,65 @@ export default function DataManager() {
     } catch { toast.error('Delete failed'); }
   };
 
+  // ── Schema operations ──
+
+  const openAddColumn = () => {
+    setColEditing(null);
+    setColForm({ column_name: '', data_type: 'varchar(255)', is_nullable: 'YES', default_value: '' });
+    setColDialogOpen(true);
+  };
+
+  const openEditColumn = (col: any) => {
+    setColEditing(col);
+    setColForm({
+      column_name: col.column_name,
+      data_type: col.data_type || 'varchar(255)',
+      is_nullable: col.is_nullable || 'YES',
+      default_value: col.column_default || '',
+    });
+    setColDialogOpen(true);
+  };
+
+  const handleColumnSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (colEditing) {
+        await api.put(`/admin/schema/${selectedTable}/column/${colEditing.column_name}`, colForm);
+        toast.success('Column updated');
+      } else {
+        await api.post(`/admin/schema/${selectedTable}/column`, {
+          column_name: colForm.column_name,
+          data_type: colForm.data_type,
+          is_nullable: colForm.is_nullable,
+          default_value: colForm.default_value || undefined,
+        });
+        toast.success('Column added');
+      }
+      setColDialogOpen(false);
+      loadSchema();
+      loadData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Schema change failed');
+    } finally { setSaving(false); }
+  };
+
+  const handleColumnDelete = async () => {
+    if (!deleteCol) return;
+    try {
+      await api.delete(`/admin/schema/${deleteCol.table}/column/${deleteCol.column}`);
+      toast.success(`Column ${deleteCol.column} dropped`);
+      setDeleteCol(null);
+      loadSchema();
+      loadData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Drop failed');
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Data Manager" subtitle="Full CRUD — view/edit/delete all tables and columns" />
+      <PageHeader title="Data Manager" subtitle="Full CRUD on all tables, columns, and schema" />
       <div className="flex items-center gap-4 flex-wrap">
         <select
           value={selectedTable}
@@ -162,32 +233,46 @@ export default function DataManager() {
         {selectedTable && (
           <>
             <button onClick={handleCreate} className="btn-primary"><Plus size={14} /> New Entry</button>
+            <button onClick={() => setSchemaOpen(!schemaOpen)} className="btn-secondary">
+              <Columns size={14} /> Schema
+            </button>
             <button onClick={loadData} className="btn-secondary" disabled={loading}>
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
-            <span className="text-sm text-text-muted">{allColumns.length} columns · {pagination.total} rows</span>
+            <span className="text-sm text-text-muted">{allColumns.length} cols · {pagination.total} rows</span>
           </>
         )}
       </div>
 
-      {selectedTable && allColumns.length > 0 && (
-        <div className="card p-3">
-          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 flex items-center gap-2">
-            <Info size={12} /> Schema — {selectedTable}
-          </h3>
-          <div className="flex flex-wrap gap-1.5">
+      {/* Schema Manager */}
+      {selectedTable && schemaOpen && (
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Columns size={14} /> Schema — {selectedTable}
+            </h3>
+            <button onClick={openAddColumn} className="btn-primary text-xs"><Plus size={12} /> Add Column</button>
+          </div>
+          <div className="space-y-1.5">
             {allColumns.map((c: any) => (
-              <div key={c.column_name} className="flex items-center gap-1 px-2 py-1 rounded bg-bg-tertiary text-xs">
-                <span className="text-text-primary font-medium">{c.column_name}</span>
-                {typeBadge(c.data_type)}
-                {c.is_nullable === 'YES' && <span className="text-[9px] text-text-muted">nullable</span>}
-                {c.column_default && <span className="text-[9px] text-text-muted ml-0.5">default</span>}
+              <div key={c.column_name} className="flex items-center justify-between p-2 rounded bg-bg-tertiary group">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{c.column_name}</span>
+                  {typeBadge(c.data_type)}
+                  {c.is_nullable === 'YES' ? <span className="text-[9px] text-text-muted">nullable</span> : <span className="text-[9px] text-red-400">NOT NULL</span>}
+                  {c.column_default && <span className="text-[9px] text-text-muted">default: {c.column_default}</span>}
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => openEditColumn(c)} className="btn-ghost p-0.5" title="Edit column"><Pencil size={12} /></button>
+                  <button onClick={() => setDeleteCol({ table: selectedTable, column: c.column_name })} className="btn-ghost p-0.5 text-red-400" title="Drop column"><X size={12} /></button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* Data Table */}
       {selectedTable && (
         <DataTable
           columns={[
@@ -210,6 +295,7 @@ export default function DataManager() {
         />
       )}
 
+      {/* Data Entry/Rows Modal */}
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={`${editingItem ? 'Edit' : 'Create'} — ${selectedTable}`} size="xl">
         <form onSubmit={handleSave} className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
           {editableColumns.map((c: any) => (
@@ -217,33 +303,18 @@ export default function DataManager() {
               <div className="flex items-center gap-1.5 mb-1">
                 <label className="text-xs font-medium text-text-primary">{c.column_name}</label>
                 {typeBadge(c.data_type)}
-                {c.is_nullable === 'YES' && <span className="text-[9px] text-text-muted">optional</span>}
-                {!c.is_nullable || c.is_nullable === 'NO' ? <span className="text-[9px] text-red-400">required</span> : null}
+                {c.is_nullable === 'YES' ? <span className="text-[9px] text-text-muted">optional</span> : <span className="text-[9px] text-red-400">required</span>}
               </div>
               {c.data_type === 'text' || c.data_type === 'jsonb' || c.data_type === 'json' ? (
-                <textarea
-                  className="input min-h-[60px] w-full text-sm"
-                  value={form[c.column_name] || ''}
-                  onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
-                  rows={3}
-                />
+                <textarea className="input min-h-[60px] w-full text-sm" value={form[c.column_name] || ''} onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })} rows={3} />
               ) : c.data_type === 'boolean' ? (
-                <select
-                  className="input w-full"
-                  value={form[c.column_name] || ''}
-                  onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
-                >
+                <select className="input w-full" value={form[c.column_name] || ''} onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}>
                   <option value="">— null —</option>
                   <option value="true">true</option>
                   <option value="false">false</option>
                 </select>
               ) : (
-                <input
-                  className="input w-full text-sm"
-                  type={c.data_type === 'date' ? 'date' : c.data_type === 'time' ? 'time' : c.data_type.includes('timestamp') ? 'datetime-local' : 'text'}
-                  value={form[c.column_name] || ''}
-                  onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
-                />
+                <input className="input w-full text-sm" type={c.data_type === 'date' ? 'date' : c.data_type === 'time' ? 'time' : c.data_type?.includes('timestamp') ? 'datetime-local' : 'text'} value={form[c.column_name] || ''} onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })} />
               )}
             </div>
           ))}
@@ -254,14 +325,39 @@ export default function DataManager() {
         </form>
       </Modal>
 
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Delete Entry"
-        message="Permanently delete this entry?"
-        variant="danger"
-      />
+      {/* Schema Column Add/Edit Modal */}
+      <Modal isOpen={colDialogOpen} onClose={() => setColDialogOpen(false)} title={colEditing ? `Edit Column — ${colEditing.column_name}` : 'Add Column'} size="md">
+        <form onSubmit={handleColumnSave} className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-text-secondary mb-1 block">Column Name</label>
+            <input className="input w-full" value={colForm.column_name} onChange={(e) => setColForm({ ...colForm, column_name: e.target.value })} disabled={!!colEditing} required />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-text-secondary mb-1 block">Data Type</label>
+            <select className="input w-full" value={colForm.data_type} onChange={(e) => setColForm({ ...colForm, data_type: e.target.value })}>
+              {TYPE_OPTIONS.map(t => (<option key={t} value={t}>{t}</option>))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-text-secondary mb-1 block">Nullable</label>
+            <select className="input w-full" value={colForm.is_nullable} onChange={(e) => setColForm({ ...colForm, is_nullable: e.target.value })}>
+              <option value="YES">YES (nullable)</option>
+              <option value="NO">NO (not null)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-text-secondary mb-1 block">Default Value (SQL, optional)</label>
+            <input className="input w-full" value={colForm.default_value} onChange={(e) => setColForm({ ...colForm, default_value: e.target.value })} placeholder="e.g. '{}' or now()" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setColDialogOpen(false)} className="btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Saving...' : colEditing ? 'Update Column' : 'Add Column'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Delete Entry" message="Permanently delete this entry?" variant="danger" />
+      <ConfirmDialog isOpen={!!deleteCol} onClose={() => setDeleteCol(null)} onConfirm={handleColumnDelete} title="Drop Column" message={`Permanently drop column "${deleteCol?.column}" from ${deleteCol?.table}? All data in this column will be lost.`} variant="danger" />
     </div>
   );
 }
