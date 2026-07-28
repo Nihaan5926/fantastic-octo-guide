@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { Pencil, Trash2, Plus, RefreshCw, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, Plus, RefreshCw, Info } from 'lucide-react';
 import api from '../../../api/client';
 import DataTable from '../../../components/common/DataTable';
 import Modal from '../../../components/common/Modal';
@@ -8,11 +8,37 @@ import PageHeader from '../../../components/common/PageHeader';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { FormInput, FormTextarea } from '../../../components/common/FormComponents';
 
+const TYPE_COLORS: Record<string, string> = {
+  uuid: 'bg-purple-500/20 text-purple-400',
+  'character varying': 'bg-blue-500/20 text-blue-400',
+  varchar: 'bg-blue-500/20 text-blue-400',
+  text: 'bg-green-500/20 text-green-400',
+  integer: 'bg-amber-500/20 text-amber-400',
+  bigint: 'bg-amber-500/20 text-amber-400',
+  numeric: 'bg-amber-500/20 text-amber-400',
+  decimal: 'bg-amber-500/20 text-amber-400',
+  boolean: 'bg-cyan-500/20 text-cyan-400',
+  jsonb: 'bg-pink-500/20 text-pink-400',
+  json: 'bg-pink-500/20 text-pink-400',
+  date: 'bg-teal-500/20 text-teal-400',
+  time: 'bg-teal-500/20 text-teal-400',
+  'timestamp with time zone': 'bg-teal-500/20 text-teal-400',
+  'timestamp without time zone': 'bg-teal-500/20 text-teal-400',
+  real: 'bg-amber-500/20 text-amber-400',
+  'ARRAY': 'bg-orange-500/20 text-orange-400',
+};
+
+function typeBadge(t: string) {
+  const short = t.replace('character varying', 'varchar').replace('timestamp with time zone', 'timestamptz').replace('timestamp without time zone', 'timestamp');
+  const color = TYPE_COLORS[t] || 'bg-gray-500/20 text-gray-400';
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${color}`}>{short}</span>;
+}
+
 export default function DataManager() {
   const [tables, setTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState('');
   const [items, setItems] = useState<any[]>([]);
-  const [columns, setColumns] = useState<any[]>([]);
+  const [allColumns, setAllColumns] = useState<any[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -36,31 +62,31 @@ export default function DataManager() {
       setPagination(res.pagination || { page: 1, limit: 50, total: 0, totalPages: 0 });
 
       const { data: schema } = await api.get(`/admin/data/${selectedTable}/schema`);
-      const cols = (schema.data || [])
-        .filter((c: any) => c.column_name !== 'id' && c.column_name !== 'created_at' && c.column_name !== 'updated_at');
-      setColumns(cols);
+      setAllColumns(schema.data || []);
     } catch { toast.error('Failed to load'); }
     finally { setLoading(false); }
   }, [selectedTable, page]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const tableColumns = columns.map(c => ({
+  const editableColumns = allColumns.filter((c: any) => c.column_name !== 'id' && c.column_name !== 'created_at' && c.column_name !== 'updated_at');
+
+  const tableColumns = allColumns.map(c => ({
     key: c.column_name,
-    label: c.column_name,
+    label: `${c.column_name} (${c.data_type.replace('character varying', 'varchar').replace('timestamp with time zone', 'timestamptz')})`,
     render: (item: any) => {
       const val = item[c.column_name];
-      if (val === null || val === undefined) return <span className="text-text-muted italic">null</span>;
-      if (typeof val === 'object') return <span className="text-xs font-mono">{JSON.stringify(val).slice(0, 60)}</span>;
+      if (val === null || val === undefined) return <span className="text-text-muted italic text-xs">—</span>;
+      if (typeof val === 'object') return <span className="text-xs font-mono text-text-secondary">{JSON.stringify(val).slice(0, 50)}</span>;
       const s = String(val);
-      if (s.length > 40) return <span title={s}>{s.slice(0, 40)}...</span>;
-      return s;
+      if (s.length > 50) return <span title={s} className="text-xs">{s.slice(0, 50)}...</span>;
+      return <span className="text-xs">{s}</span>;
     },
   }));
 
   const handleCreate = () => {
     const empty: Record<string, string> = {};
-    columns.forEach(c => { empty[c.column_name] = ''; });
+    editableColumns.forEach((c: any) => { empty[c.column_name] = ''; });
     setForm(empty);
     setEditingItem(null);
     setFormOpen(true);
@@ -68,7 +94,7 @@ export default function DataManager() {
 
   const handleEdit = (item: any) => {
     const f: Record<string, string> = {};
-    columns.forEach(c => {
+    editableColumns.forEach((c: any) => {
       const v = item[c.column_name];
       f[c.column_name] = v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
     });
@@ -82,15 +108,17 @@ export default function DataManager() {
     setSaving(true);
     try {
       const payload: Record<string, any> = {};
-      columns.forEach(c => {
+      editableColumns.forEach((c: any) => {
         let v: any = form[c.column_name];
         if (v === '') v = null;
         else if (c.data_type === 'jsonb' || c.data_type === 'json') {
           try { v = JSON.parse(v); } catch { v = {}; }
-        } else if (c.data_type === 'integer' || c.data_type === 'bigint' || c.data_type === 'numeric') {
-          v = v === null ? null : Number(v);
+        } else if (c.data_type === 'integer' || c.data_type === 'bigint' || c.data_type === 'smallint') {
+          v = v === null ? null : parseInt(v, 10);
+        } else if (c.data_type === 'numeric' || c.data_type === 'decimal' || c.data_type === 'real' || c.data_type === 'double precision') {
+          v = v === null ? null : parseFloat(v);
         } else if (c.data_type === 'boolean') {
-          v = v === 'true' || v === true;
+          v = v === 'true' || v === true || v === '1';
         }
         payload[c.column_name] = v;
       });
@@ -121,8 +149,8 @@ export default function DataManager() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Data Manager" subtitle="Full CRUD access to all module data" />
-      <div className="flex items-center gap-4">
+      <PageHeader title="Data Manager" subtitle="Full CRUD — view/edit/delete all tables and columns" />
+      <div className="flex items-center gap-4 flex-wrap">
         <select
           value={selectedTable}
           onChange={(e) => { setSelectedTable(e.target.value); setPage(1); }}
@@ -137,9 +165,28 @@ export default function DataManager() {
             <button onClick={loadData} className="btn-secondary" disabled={loading}>
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
+            <span className="text-sm text-text-muted">{allColumns.length} columns · {pagination.total} rows</span>
           </>
         )}
       </div>
+
+      {selectedTable && allColumns.length > 0 && (
+        <div className="card p-3">
+          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 flex items-center gap-2">
+            <Info size={12} /> Schema — {selectedTable}
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {allColumns.map((c: any) => (
+              <div key={c.column_name} className="flex items-center gap-1 px-2 py-1 rounded bg-bg-tertiary text-xs">
+                <span className="text-text-primary font-medium">{c.column_name}</span>
+                {typeBadge(c.data_type)}
+                {c.is_nullable === 'YES' && <span className="text-[9px] text-text-muted">nullable</span>}
+                {c.column_default && <span className="text-[9px] text-text-muted ml-0.5">default</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {selectedTable && (
         <DataTable
@@ -148,9 +195,9 @@ export default function DataManager() {
             {
               key: 'actions', label: 'Actions',
               render: (item: any) => (
-                <div className="flex gap-2">
-                  <button onClick={() => handleEdit(item)} className="btn-ghost p-1"><Pencil size={14} /></button>
-                  <button onClick={() => setDeleteTarget(item)} className="btn-ghost p-1 text-red-400"><Trash2 size={14} /></button>
+                <div className="flex gap-1">
+                  <button onClick={() => handleEdit(item)} className="btn-ghost p-1"><Pencil size={13} /></button>
+                  <button onClick={() => setDeleteTarget(item)} className="btn-ghost p-1 text-red-400"><Trash2 size={13} /></button>
                 </div>
               ),
             },
@@ -158,32 +205,49 @@ export default function DataManager() {
           data={items}
           pagination={pagination}
           isLoading={loading}
-          emptyMessage="No entries"
+          emptyMessage="No entries in this table"
           onPageChange={setPage}
         />
       )}
 
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingItem ? 'Edit Entry' : 'Create Entry'} size="lg">
-        <form onSubmit={handleSave} className="space-y-3 max-h-[70vh] overflow-y-auto">
-          {columns.filter(c => c.column_name !== 'id').map(c => (
-            c.data_type === 'text' || c.data_type === 'jsonb' || c.data_type === 'json' ? (
-              <FormTextarea
-                key={c.column_name}
-                label={c.column_name}
-                value={form[c.column_name] || ''}
-                onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
-                rows={2}
-              />
-            ) : (
-              <FormInput
-                key={c.column_name}
-                label={c.column_name}
-                value={form[c.column_name] || ''}
-                onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
-              />
-            )
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={`${editingItem ? 'Edit' : 'Create'} — ${selectedTable}`} size="xl">
+        <form onSubmit={handleSave} className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+          {editableColumns.map((c: any) => (
+            <div key={c.column_name}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="text-xs font-medium text-text-primary">{c.column_name}</label>
+                {typeBadge(c.data_type)}
+                {c.is_nullable === 'YES' && <span className="text-[9px] text-text-muted">optional</span>}
+                {!c.is_nullable || c.is_nullable === 'NO' ? <span className="text-[9px] text-red-400">required</span> : null}
+              </div>
+              {c.data_type === 'text' || c.data_type === 'jsonb' || c.data_type === 'json' ? (
+                <textarea
+                  className="input min-h-[60px] w-full text-sm"
+                  value={form[c.column_name] || ''}
+                  onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
+                  rows={3}
+                />
+              ) : c.data_type === 'boolean' ? (
+                <select
+                  className="input w-full"
+                  value={form[c.column_name] || ''}
+                  onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
+                >
+                  <option value="">— null —</option>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              ) : (
+                <input
+                  className="input w-full text-sm"
+                  type={c.data_type === 'date' ? 'date' : c.data_type === 'time' ? 'time' : c.data_type.includes('timestamp') ? 'datetime-local' : 'text'}
+                  value={form[c.column_name] || ''}
+                  onChange={(e) => setForm({ ...form, [c.column_name]: e.target.value })}
+                />
+              )}
+            </div>
           ))}
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border sticky bottom-0 bg-bg-card py-3">
             <button type="button" onClick={() => setFormOpen(false)} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
           </div>
