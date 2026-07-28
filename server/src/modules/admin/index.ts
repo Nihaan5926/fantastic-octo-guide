@@ -9,6 +9,7 @@ const manifest = {
   apiPrefix: '/api/admin',
   navItems: [
     { label: 'Users', path: '/admin/users', icon: 'Users', category: 'ADMIN', order: 90, permissions: ['admin:*'] },
+    { label: 'Data Manager', path: '/admin/data', icon: 'Database', category: 'ADMIN', order: 89, permissions: ['admin:*'] },
     { label: 'Audit Logs', path: '/admin/audit-logs', icon: 'ListChecks', category: 'ADMIN', order: 91, permissions: ['admin:*'] },
     { label: 'System Health', path: '/admin/health', icon: 'Activity', category: 'ADMIN', order: 92, permissions: ['admin:*'] },
     { label: 'Bulk Import', path: '/admin/bulk-import', icon: 'Upload', category: 'ADMIN', order: 93, permissions: ['admin:*'] },

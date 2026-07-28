@@ -371,4 +371,96 @@ router.delete('/logs', async (_req: Request, res: Response, next: NextFunction) 
   } catch (e) { next(e); }
 });
 
+// ── Data Management (Full CRUD on any table) ─────────────────────────────────
+
+const ALLOWED_TABLES = [
+  'sources', 'cases', 'evidence', 'intelligence_reports', 'target_packages', 'target_nominations',
+  'tasking_assignments', 'tasking_workflows', 'threat_actors', 'indicators',
+  'sigint_intercepts', 'sigint_emitters', 'geoint_features', 'geoint_annotations',
+  'fint_entities', 'fint_transactions', 'biometric_records', 'biometric_watchlists', 'biometric_encounters',
+  'ci_investigations', 'ci_foreign_agents', 'ci_insider_threats',
+  'personnel_records', 'personnel_assignments', 'org_units',
+  'training_courses', 'training_enrollments', 'after_action_reports',
+  'shift_schedules', 'watch_logs', 'sitreps',
+  'osint_collection_tasks', 'osint_collected_items',
+  'external_partners', 'mou_agreements', 'partner_contact_logs',
+  'mission_plans', 'mission_briefs', 'mission_debriefs', 'mission_roster',
+  'briefings', 'briefing_distributions',
+  'program_budgets', 'budget_line_items', 'contracts',
+  'legal_reviews', 'legal_holds', 'compliance_checks',
+  'collection_requirements', 'collection_assets', 'collection_pirs',
+  'archive_records', 'declassification_requests',
+  'message_channels', 'secure_messages', 'channel_members',
+  'notifications',
+  'entity_relationships', 'entity_tags', 'entity_comments', 'entity_attachments',
+  'users', 'roles',
+];
+
+router.get('/data/tables', async (_req: Request, res: Response) => {
+  res.json({ data: ALLOWED_TABLES });
+});
+
+router.get('/data/:table', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = (page - 1) * limit;
+    const items = await db(table).select('*').limit(limit).offset(offset);
+    const total = await db(table).count('id').first().then((r: any) => parseInt(r.count, 10));
+    res.json({ data: items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (e) { next(e); }
+});
+
+router.get('/data/:table/schema', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    const cols = await db('information_schema.columns')
+      .select('column_name', 'data_type', 'is_nullable', 'column_default')
+      .where({ table_schema: 'public', table_name: table })
+      .orderBy('ordinal_position', 'asc');
+    res.json({ data: cols });
+  } catch (e) { next(e); }
+});
+
+router.get('/data/:table/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table, id } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    const item = await db(table).where({ id }).first();
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.post('/data/:table', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    const [item] = await db(table).insert({ ...req.body, id: uuid() }).returning('*');
+    res.status(201).json(item);
+  } catch (e) { next(e); }
+});
+
+router.put('/data/:table/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table, id } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    const [item] = await db(table).where({ id }).update({ ...req.body, updated_at: db.fn.now() }).returning('*');
+    if (!item) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(item);
+  } catch (e) { next(e); }
+});
+
+router.delete('/data/:table/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { table, id } = req.params;
+    if (!ALLOWED_TABLES.includes(table)) { res.status(400).json({ error: 'Invalid table' }); return; }
+    await db(table).where({ id }).del();
+    res.json({ message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
 export default router;
