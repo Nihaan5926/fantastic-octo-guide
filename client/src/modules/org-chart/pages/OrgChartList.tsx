@@ -1,6 +1,509 @@
-import React from 'react';
-import GenericCrudPage from '../../../components/common/GenericCrudPage';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import toast from 'react-hot-toast';
+import { ChevronRight, ChevronDown, Pencil, Trash2, Plus, Building2, Download, ChevronDown as ChevronDownIcon, Users } from 'lucide-react';
+import { exportToCSV, exportToJSON } from '../../../utils/export';
+import { orgChartApi } from '../api';
+import PageHeader from '../../../components/common/PageHeader';
+import SearchBar from '../../../components/common/SearchBar';
+import DataTable from '../../../components/common/DataTable';
+import Modal from '../../../components/common/Modal';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { CardSkeleton } from '../../../components/common/LoadingSkeleton';
+import { FormInput, FormTextarea, FormSelect } from '../../../components/common/FormComponents';
+import { useOrgChartStore, OrgUnit, PersonnelAssignment } from '../store';
 
-export default function Page() {
-  return <GenericCrudPage tableName="org_units" title="Org Chart" subtitle="Manage organizational units" apiBase="/org-chart/units" />;
+const UNIT_TYPE_OPTIONS = [
+  { value: 'DIRECTORATE', label: 'Directorate' },
+  { value: 'DIVISION', label: 'Division' },
+  { value: 'BRANCH', label: 'Branch' },
+  { value: 'SECTION', label: 'Section' },
+  { value: 'TEAM', label: 'Team' },
+  { value: 'SQUAD', label: 'Squad' },
+  { value: 'DETACHMENT', label: 'Detachment' },
+];
+
+const unitTypeColors: Record<string, string> = {
+  DIRECTORATE: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  DIVISION: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  BRANCH: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  SECTION: 'bg-green-500/20 text-green-400 border-green-500/30',
+  TEAM: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  SQUAD: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  DETACHMENT: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+};
+
+function TreeNode({ unit, level = 0, assignments }: { unit: OrgUnit; level?: number; assignments: PersonnelAssignment[] }) {
+  const [expanded, setExpanded] = useState(level < 2);
+  const hasChildren = unit.children && unit.children.length > 0;
+  const unitAssignments = assignments.filter((a) => a.org_unit_id === unit.id);
+  const personCount = unitAssignments.length;
+  const typeBadge = unitTypeColors[unit.unit_type] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+
+  return (
+    <div style={{ marginLeft: level > 0 ? 0 : 0 }}>
+      <div className="flex items-start" style={{ paddingLeft: level === 0 ? 0 : 0 }}>
+        <div className="flex flex-col items-center shrink-0" style={{ width: level > 0 ? 32 : 0 }}>
+          {level > 0 && (
+            <>
+              <div className="w-0.5 bg-border flex-1 min-h-[12px]" />
+              <div className="w-4 h-0.5 bg-border" />
+            </>
+          )}
+        </div>
+        <div
+          className={`flex-1 rounded-lg border border-border bg-bg-card hover:bg-bg-hover transition-colors mb-1 cursor-pointer ${expanded && hasChildren ? 'border-l-accent border-l-2' : ''}`}
+          onClick={() => hasChildren && setExpanded(!expanded)}
+        >
+          <div className="flex items-center gap-2 p-2.5">
+            {hasChildren ? (
+              <span className="text-text-muted shrink-0">
+                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+            ) : (
+              <span className="w-3.5 shrink-0" />
+            )}
+            <Building2 size={14} className="text-accent shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold truncate">{unit.name}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${typeBadge}`}>
+                  {unit.unit_type}
+                </span>
+              </div>
+              {unit.commander_id && (
+                <div className="text-xs text-text-muted mt-0.5">Commander: {unit.commander_id}</div>
+              )}
+            </div>
+            {personCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-accent/15 text-accent border border-accent/25 shrink-0">
+                <Users size={10} /> {personCount}
+              </span>
+            )}
+            {unit.location && (
+              <span className="text-xs text-text-muted shrink-0 hidden sm:inline">{unit.location}</span>
+            )}
+          </div>
+        </div>
+      </div>
+      {expanded && hasChildren && (
+        <div style={{ paddingLeft: level > 0 ? 0 : 0 }}>
+          {unit.children!.map((child) => (
+            <TreeNode key={child.id} unit={child} level={level + 1} assignments={assignments} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const emptyUnitForm: Partial<OrgUnit> = {
+  name: '',
+  parent_id: null,
+  unit_type: 'SECTION',
+  commander_id: '',
+  description: '',
+  location: '',
+  established_date: '',
+};
+
+const emptyAssignmentForm: Partial<PersonnelAssignment> = {
+  org_unit_id: '',
+  user_id: '',
+  position_title: '',
+  is_primary: false,
+  start_date: '',
+  end_date: '',
+};
+
+export default function OrgChartList() {
+  const {
+    tree, units, assignments, pagination, assignmentsPagination, isLoading,
+    fetchTree, fetchUnits, fetchAssignments,
+    createUnit, updateUnit, deleteUnit,
+    createAssignment, updateAssignment, deleteAssignment,
+  } = useOrgChartStore();
+
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [assignmentPage, setAssignmentPage] = useState(1);
+
+  const [unitModalOpen, setUnitModalOpen] = useState(false);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [deleteTargetUnit, setDeleteTargetUnit] = useState<OrgUnit | null>(null);
+  const [deleteTargetAssignment, setDeleteTargetAssignment] = useState<PersonnelAssignment | null>(null);
+  const [unitForm, setUnitForm] = useState<Partial<OrgUnit>>(emptyUnitForm);
+  const [assignmentForm, setAssignmentForm] = useState<Partial<PersonnelAssignment>>(emptyAssignmentForm);
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const load = useCallback(() => {
+    fetchTree();
+    fetchUnits({ search, page, limit: 20 });
+    fetchAssignments({ page: assignmentPage, limit: 20 });
+  }, [fetchTree, fetchUnits, fetchAssignments, search, page, assignmentPage]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const { data } = await orgChartApi.listUnits({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToCSV(allItems, 'org-chart-units-export');
+      toast.success(`Exported ${allItems.length} units as CSV`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const { data } = await orgChartApi.listUnits({ limit: 1000 });
+      const allItems = data.data || data.items || [];
+      exportToJSON(allItems, 'org-chart-units-export');
+      toast.success(`Exported ${allItems.length} units as JSON`);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const handleCreateUnit = () => {
+    setEditingUnitId(null);
+    setUnitForm(emptyUnitForm);
+    setUnitModalOpen(true);
+  };
+
+  const handleEditUnit = (unit: OrgUnit) => {
+    setEditingUnitId(unit.id);
+    setUnitForm({
+      name: unit.name,
+      parent_id: unit.parent_id,
+      unit_type: unit.unit_type,
+      commander_id: unit.commander_id || '',
+      description: unit.description || '',
+      location: unit.location || '',
+      established_date: unit.established_date || '',
+    });
+    setUnitModalOpen(true);
+  };
+
+  const handleSaveUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      if (editingUnitId) {
+        await updateUnit(editingUnitId, unitForm);
+        toast.success('Unit updated');
+      } else {
+        await createUnit(unitForm);
+        toast.success('Unit created');
+      }
+      setUnitModalOpen(false);
+    } catch {
+      toast.error('Operation failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteUnit = async () => {
+    if (!deleteTargetUnit) return;
+    try {
+      await deleteUnit(deleteTargetUnit.id);
+      toast.success('Unit deleted');
+      setDeleteTargetUnit(null);
+    } catch {
+      toast.error('Delete failed');
+    }
+  };
+
+  const handleCreateAssignment = () => {
+    setEditingAssignmentId(null);
+    setAssignmentForm(emptyAssignmentForm);
+    setAssignmentModalOpen(true);
+  };
+
+  const handleEditAssignment = (a: PersonnelAssignment) => {
+    setEditingAssignmentId(a.id);
+    setAssignmentForm({
+      org_unit_id: a.org_unit_id,
+      user_id: a.user_id,
+      position_title: a.position_title,
+      is_primary: a.is_primary,
+      start_date: a.start_date || '',
+      end_date: a.end_date || '',
+    });
+    setAssignmentModalOpen(true);
+  };
+
+  const handleSaveAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      if (editingAssignmentId) {
+        await updateAssignment(editingAssignmentId, assignmentForm);
+        toast.success('Assignment updated');
+      } else {
+        await createAssignment(assignmentForm);
+        toast.success('Assignment created');
+      }
+      setAssignmentModalOpen(false);
+    } catch {
+      toast.error('Operation failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteAssignment = async () => {
+    if (!deleteTargetAssignment) return;
+    try {
+      await deleteAssignment(deleteTargetAssignment.id);
+      toast.success('Assignment deleted');
+      setDeleteTargetAssignment(null);
+    } catch {
+      toast.error('Delete failed');
+    }
+  };
+
+  const setUnitField = (field: string, value: any) => setUnitForm((f) => ({ ...f, [field]: value }));
+  const setAssignmentField = (field: string, value: any) => setAssignmentForm((f) => ({ ...f, [field]: value }));
+
+  const unitColumns = [
+    { key: 'name', label: 'Name' },
+    { key: 'unit_type', label: 'Type' },
+    { key: 'location', label: 'Location' },
+    { key: 'established_date', label: 'Established' },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (item: OrgUnit) => (
+        <div className="flex items-center gap-2">
+          <button onClick={(e) => { e.stopPropagation(); handleEditUnit(item); }} className="btn-ghost p-1.5">
+            <Pencil size={14} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); setDeleteTargetUnit(item); }} className="btn-ghost p-1.5 text-accent-danger">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const assignmentColumns = [
+    { key: 'org_unit_id', label: 'Unit ID' },
+    { key: 'user_id', label: 'User ID' },
+    { key: 'position_title', label: 'Position' },
+    {
+      key: 'is_primary',
+      label: 'Primary',
+      render: (item: PersonnelAssignment) => (
+        <span className={`badge ${item.is_primary ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>
+          {item.is_primary ? 'Yes' : 'No'}
+        </span>
+      ),
+    },
+    { key: 'start_date', label: 'Start Date' },
+    { key: 'end_date', label: 'End Date' },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (item: PersonnelAssignment) => (
+        <div className="flex items-center gap-2">
+          <button onClick={(e) => { e.stopPropagation(); handleEditAssignment(item); }} className="btn-ghost p-1.5">
+            <Pencil size={14} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); setDeleteTargetAssignment(item); }} className="btn-ghost p-1.5 text-accent-danger">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Organizational Chart"
+        subtitle="Manage units, structure, and personnel assignments"
+      >
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(!exportOpen)}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">Exporting...</span>
+              </span>
+            ) : (
+              <>
+                <Download size={16} />
+                Export
+                <ChevronDownIcon size={14} />
+              </>
+            )}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card border border-border rounded-xl shadow-xl z-50 py-1">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <Download size={14} /> Export JSON
+              </button>
+            </div>
+          )}
+        </div>
+      </PageHeader>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Unit Hierarchy</h2>
+            <button onClick={handleCreateUnit} className="btn-primary text-xs">
+              <Plus size={14} /> Add Unit
+            </button>
+          </div>
+          {isLoading && tree.length === 0 ? (
+            <CardSkeleton />
+          ) : tree.length === 0 ? (
+            <div className="text-center py-8 text-text-muted">No units configured</div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              {tree.map((unit) => (
+                <TreeNode key={unit.id} unit={unit} assignments={assignments} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">All Units</h2>
+          </div>
+          <SearchBar value={search} onChange={setSearch} placeholder="Search units..." className="mb-3" />
+          <DataTable
+            columns={unitColumns}
+            data={units}
+            pagination={pagination}
+            isLoading={isLoading}
+            emptyMessage="No units found"
+            onPageChange={setPage}
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Personnel Assignments</h2>
+          <button onClick={handleCreateAssignment} className="btn-primary text-xs">
+            <Plus size={14} /> Add Assignment
+          </button>
+        </div>
+        <DataTable
+          columns={assignmentColumns}
+          data={assignments}
+          pagination={assignmentsPagination}
+          isLoading={isLoading}
+          emptyMessage="No assignments found"
+          onPageChange={setAssignmentPage}
+        />
+      </div>
+
+      <Modal isOpen={unitModalOpen} onClose={() => setUnitModalOpen(false)} title={editingUnitId ? 'Edit Unit' : 'Create Unit'} size="lg">
+        <form onSubmit={handleSaveUnit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormInput label="Name" value={unitForm.name || ''} onChange={(e) => setUnitField('name', e.target.value)} />
+            <FormSelect label="Unit Type" value={unitForm.unit_type || 'SECTION'} options={UNIT_TYPE_OPTIONS} onChange={(e) => setUnitField('unit_type', e.target.value)} />
+            <FormInput label="Parent Unit ID" value={unitForm.parent_id || ''} onChange={(e) => setUnitField('parent_id', e.target.value || null)} />
+            <FormInput label="Commander ID" value={unitForm.commander_id || ''} onChange={(e) => setUnitField('commander_id', e.target.value)} />
+            <FormInput label="Location" value={unitForm.location || ''} onChange={(e) => setUnitField('location', e.target.value)} />
+            <FormInput label="Established Date" type="date" value={unitForm.established_date || ''} onChange={(e) => setUnitField('established_date', e.target.value)} />
+          </div>
+          <FormTextarea label="Description" value={unitForm.description || ''} onChange={(e) => setUnitField('description', e.target.value)} />
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setUnitModalOpen(false)} className="btn-secondary">Cancel</button>
+            <button type="submit" disabled={isSaving} className="btn-primary">
+              {isSaving ? 'Saving...' : editingUnitId ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={assignmentModalOpen} onClose={() => setAssignmentModalOpen(false)} title={editingAssignmentId ? 'Edit Assignment' : 'Create Assignment'} size="md">
+        <form onSubmit={handleSaveAssignment} className="space-y-4">
+          <FormInput label="Unit ID" value={assignmentForm.org_unit_id || ''} onChange={(e) => setAssignmentField('org_unit_id', e.target.value)} />
+          <FormInput label="User ID" value={assignmentForm.user_id || ''} onChange={(e) => setAssignmentField('user_id', e.target.value)} />
+          <FormInput label="Position Title" value={assignmentForm.position_title || ''} onChange={(e) => setAssignmentField('position_title', e.target.value)} />
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="is_primary"
+              checked={assignmentForm.is_primary || false}
+              onChange={(e) => setAssignmentField('is_primary', e.target.checked)}
+              className="rounded"
+            />
+            <label htmlFor="is_primary" className="text-sm text-text-secondary">Primary Assignment</label>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput label="Start Date" type="date" value={assignmentForm.start_date || ''} onChange={(e) => setAssignmentField('start_date', e.target.value)} />
+            <FormInput label="End Date" type="date" value={assignmentForm.end_date || ''} onChange={(e) => setAssignmentField('end_date', e.target.value)} />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setAssignmentModalOpen(false)} className="btn-secondary">Cancel</button>
+            <button type="submit" disabled={isSaving} className="btn-primary">
+              {isSaving ? 'Saving...' : editingAssignmentId ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTargetUnit}
+        onClose={() => setDeleteTargetUnit(null)}
+        onConfirm={handleDeleteUnit}
+        title="Delete Unit"
+        message={`Are you sure you want to delete "${deleteTargetUnit?.name}"? This may affect sub-units and assignments.`}
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteTargetAssignment}
+        onClose={() => setDeleteTargetAssignment(null)}
+        onConfirm={handleDeleteAssignment}
+        title="Delete Assignment"
+        message="Are you sure you want to delete this assignment?"
+        variant="danger"
+      />
+    </div>
+  );
 }
